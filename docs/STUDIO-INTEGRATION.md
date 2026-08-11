@@ -2,24 +2,50 @@
 
 ## But
 
-Track-To-Market Engine V0.1 reste autonome pour valider le workflow gratuitement. L'étape suivante consiste à l'intégrer dans `shinobione/shinobiwan-studio` comme module de production **track-centric**.
+Track-To-Market Engine est un module **AI-first** préparé pour une intégration track-centric dans `shinobione/shinobiwan-studio`.
 
-Studio est actuellement React + Vite + TypeScript. Track-To-Market utilise volontairement la même base technique.
+Studio et Track-To-Market partagent React + Vite + TypeScript. Le frontend reste statique ; la génération de covers passe par un Worker Cloudflare séparé afin de ne jamais exposer de secret dans GitHub Pages.
 
-## Intégration recommandée — native
+## Topologie cible
 
-Ne pas conserver un iframe comme architecture finale. Préférer :
+```text
+SHINOBIWAN Studio
+  -> TrackToMarketView
+  -> track-to-market-ai.jerryquinet.workers.dev
+  -> Cloudflare Workers AI / FLUX.2 [klein] 4B
+```
 
-1. déplacer/adapter `src/lib/releaseEngine.ts`, `artwork.ts` et `video.ts` dans Studio ;
-2. créer un `TrackToMarketView` / `ReleaseWorkspace` côté Studio ;
+Le Worker doit être protégé par Cloudflare Access en production personnelle. L'origin autorisée côté CORS est `https://shinobione.github.io`.
+
+## Intégration native recommandée
+
+1. intégrer `releaseEngine.ts`, `aiArtwork.ts`, `studioBridge.ts` et les composants concernés dans Studio ;
+2. créer un `TrackToMarketView` ou `ReleaseWorkspace` ;
 3. l'ouvrir depuis le `TrackWorkspace` d'un `trackId` canonique ;
-4. hydrater les inputs depuis les métadonnées/lyrics déjà présentes dans Studio ;
-5. conserver l'export ZIP comme action locale ;
-6. toute écriture canonique future doit passer par les services/autorités Studio existants, jamais directement depuis le moteur d'artwork.
+4. hydrater les inputs avec les métadonnées / lyrics Studio ;
+5. enrichir la direction artistique avec SonicTrace quand disponible ;
+6. conserver l'export ZIP local ;
+7. toute écriture canonique future passe par Track Manager / services Studio existants.
 
-## Bridge de transition
+## Données attendues
 
-La version standalone accepte ces query params :
+Minimum :
+
+- `trackId`
+- `title`
+- `genres`
+
+Souhaitables :
+
+- lyrics canoniques `lyrics.txt`
+- prompt Suno / audioStyle
+- mood / instrumentation / énergie SonicTrace
+- cover canonique comme référence optionnelle
+- logo SHINOBIWAN
+
+## Bridge standalone temporaire
+
+La standalone accepte :
 
 ```text
 ?source=studio
@@ -31,9 +57,9 @@ La version standalone accepte ces query params :
 &lyrics=<lyrics>
 ```
 
-`lyrics` dans l'URL n'est prévu que pour des tests courts. Pour une intégration réelle, éviter les longues paroles en query string.
+Les longues lyrics ne doivent pas être transportées durablement en query string.
 
-Quand elle est chargée dans un contexte parent, l'app peut émettre :
+Elle peut publier :
 
 ```ts
 {
@@ -42,7 +68,7 @@ Quand elle est chargée dans un contexte parent, l'app peut émettre :
 }
 ```
 
-Lors d'un export ZIP :
+et lors de l'export :
 
 ```ts
 {
@@ -54,28 +80,13 @@ Lors d'un export ZIP :
 }
 ```
 
-Ce `postMessage` est un bridge de transition uniquement. Une intégration native supprimera ce besoin.
-
-## Données attendues de Studio
-
-Minimum :
-
-- `trackId`
-- `title`
-- `genres`
-
-Amélioration :
-
-- lyrics canoniques `lyrics.txt`
-- résumé / mood SonicTrace
-- instrumentation / énergie / brightness
-- prompt Suno ou style source s'il existe dans les métadonnées
-- cover canonique comme inspiration optionnelle
-
 ## Garde-fous
 
-- pas de clé API dans le client ;
-- pas d'écriture directe R2/Track Manager depuis la standalone ;
-- pas de duplication de `lyrics.txt` comme source de vérité ;
-- ne pas modifier les assets canoniques sans action utilisateur explicite ;
-- conserver le mode local gratuit même si un provider IA optionnel est ajouté plus tard.
+- aucune clé API dans le client ;
+- Worker AI séparé des Workers media/R2 existants ;
+- ne pas modifier `launchpad-media` ou `launchpad-r2-api` pour cette fonctionnalité ;
+- Cloudflare Access recommandé avant exposition de l'endpoint IA ;
+- pas de duplication de `lyrics.txt` ;
+- pas d'écriture R2 directe depuis Track-To-Market ;
+- Canvas local = secours explicite uniquement ;
+- ne jamais présenter le fallback Canvas comme une génération IA.

@@ -20,6 +20,8 @@ export interface ArtworkVariation {
   dataUrl: string;
   seed: number;
   aspectRatio: '16:9' | '1:1' | '9:16';
+  provider?: 'workers-ai' | 'local';
+  model?: string;
 }
 
 export interface FormatPack {
