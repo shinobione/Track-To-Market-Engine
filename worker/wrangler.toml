@@ -1,0 +1,10 @@
+name = "track-to-market-ai"
+main = "index.js"
+compatibility_date = "2026-08-11"
+workers_dev = true
+
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGINS = "https://shinobione.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
