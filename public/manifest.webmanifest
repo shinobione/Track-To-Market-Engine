@@ -5,5 +5,13 @@
   "display": "standalone",
   "background_color": "#090b0f",
   "theme_color": "#090b0f",
-  "description": "Local-first music release pack generator for SHINOBIWAN Studio."
+  "description": "Local-first music release pack generator for SHINOBIWAN Studio.",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }
