@@ -65,7 +65,7 @@ async function generateImage(request, env) {
   const width = Math.min(1920, Math.max(256, Number(incoming.get('width') || 1024)));
   const height = Math.min(1920, Math.max(256, Number(incoming.get('height') || 768)));
   const seed = Math.min(9999999999, Math.max(1, Number(incoming.get('seed') || 1)));
-  const profile = String(incoming.get('profile') || 'quality') === 'fast' ? 'fast' : 'quality';
+  const profile = String(incoming.get('profile') || 'fast') === 'quality' ? 'quality' : 'fast';
   const model = profile === 'quality' ? QUALITY_MODEL : FAST_MODEL;
 
   if (!prompt) return json(request, env, { error: 'Prompt is required.' }, 400);
