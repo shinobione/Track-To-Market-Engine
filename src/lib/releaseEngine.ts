@@ -22,16 +22,24 @@ function inferMood(params: GenerationParams): string[] {
 export function generateCoverPrompt(params: GenerationParams, variant = 0): string {
   const genres = params.genres.join(', ');
   const mood = inferMood(params).join(', ');
-  const direction = clean(params.style) || 'modern urban cinematic artwork';
+  const direction = clean(params.style) || 'modern cinematic editorial artwork';
   const audio = clean(params.audioStyle) || 'dynamic contemporary production';
   const compositions = [
-    'bold central composition with strong depth and controlled negative space',
-    'off-center editorial composition with layered foreground and background depth',
-    'wide cinematic composition with a strong horizon and dramatic perspective',
-    'graphic poster composition with geometric framing and premium album-art restraint',
+    'bold editorial composition with one memorable focal idea and controlled negative space',
+    'off-center composition with layered foreground/background depth and tactile material detail',
+    'wide cinematic composition with sophisticated perspective and restrained visual hierarchy',
+    'minimal conceptual composition with premium campaign restraint and distinctive geometry',
   ];
 
-  return `Create a premium 16:9 music release artwork for the track “${clean(params.title)}”. The exact track title must be the dominant readable typography. Genres: ${genres}. Sonic character: ${audio}. Mood: ${mood}. Art direction: ${direction}. Use ${compositions[variant % compositions.length]}. Integrate the SHINOBIWAN artist logo only as a subtle secondary environmental branding element when a logo reference is provided. Preserve logo proportions. Detailed lighting, coherent palette, tactile texture, restrained bloom, subtle chromatic aberration, high-end music campaign finish. No extra words, no mockup frame, no watermark.`;
+  return [
+    `Create premium 16:9 artwork for the music track context “${clean(params.title)}”.`,
+    `Genres: ${genres}. Sonic character: ${audio}. Mood: ${mood}. Art direction: ${direction}.`,
+    `Use ${compositions[variant % compositions.length]}.`,
+    'ARTWORK BACKGROUND ONLY: do not render the track title, letters, words, logos, watermarks or fake typography. Exact title and artist branding will be composited after generation.',
+    'Leave useful clean negative space around the lower-left region for later title placement, while keeping the artwork visually complete without text.',
+    'Avoid generic AI album-cover clichés: no random speakers, headphones, microphones, equalizers, vinyl records, glowing music notes or audio hardware unless explicitly requested by the art direction.',
+    'Prioritize a distinctive visual metaphor, coherent palette, believable materials, restrained bloom, detailed lighting and high-end editorial music-campaign finish.',
+  ].join(' ');
 }
 
 export function generateDescription(params: GenerationParams): string {

@@ -18,6 +18,7 @@ export interface ReleasePack {
 export interface ArtworkVariation {
   id: string;
   dataUrl: string;
+  sourceDataUrl?: string;
   seed: number;
   aspectRatio: '16:9' | '1:1' | '9:16';
   provider?: 'workers-ai' | 'external-ai' | 'local';

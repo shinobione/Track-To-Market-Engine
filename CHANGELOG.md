@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.1 — 2026-08-11
+
+### Quality / artwork
+- Default automatic artwork profile moved from FLUX.2 [klein] 4B to **FLUX.2 [dev] at 8 steps** for higher-fidelity output.
+- FLUX now generates **artwork backgrounds only**; it is no longer asked to redraw the title or SHINOBIWAN logo.
+- Exact track title + real uploaded artist logo are composited deterministically in-browser after generation.
+- Raw AI artwork is retained separately from the branded cover so 1:1 / 9:16 adaptations can use a clean source reference.
+- Four base covers now receive four distinct art-direction modifiers instead of differing only by seed.
+- Prompting explicitly avoids generic AI music-cover clichés (random speakers, headphones, equalizers, vinyl, etc.) unless requested by the user's direction.
+
+### Moderation / reliability
+- Cloudflare output-moderation rejections are classified as `CONTENT_FLAGGED` rather than being reported as a dead AI engine.
+- A flagged variant is automatically retried with a new seed and a safer abstract/object-focused direction.
+- One rejected slot no longer aborts the entire four-cover batch.
+- Format adaptation receives the same moderation-aware retry behavior.
+
+### UX
+- Added **Régénérer les 4** controls directly in the cover gallery; no page refresh is needed.
+- New generation rounds use a fresh random nonce, so rerolling does not replay the same deterministic seeds.
+- Inputs are autosaved locally in the browser and restored after refresh when possible.
+- Bright native vertical scrollbars were replaced by thin dark scrollbars matching the app.
+- Textareas no longer expose the ugly native resize handle.
+- `Nouveau pack` was renamed to `Recalculer le pack` to make its behavior explicit.
+- Added non-blocking notices for recovered moderation retries.
+
+### Cost note
+- FLUX.2 [dev] is more expensive in Neurons than Klein 4B. V0.1.1 uses 8 steps as a quality/cost compromise intended to keep roughly one normal personal release-pack workflow within Cloudflare's current free daily allocation.
+- Klein 4B remains available in the Worker as the fast profile/fallback.
+
 ## 0.1.0 — 2026-08-11
 
 ### Added
