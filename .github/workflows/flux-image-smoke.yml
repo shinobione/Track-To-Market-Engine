@@ -1,0 +1,42 @@
+name: FLUX Image Smoke
+
+on:
+  push:
+    branches: [agent/flux-image-smoke]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request one 512x512 FLUX image
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error \
+            --output response.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --form 'prompt=Minimal cinematic electronic music cover, dark graphite background, cyan volumetric light, abstract energy arc, no text' \
+            --form 'width=512' \
+            --form 'height=512' \
+            --form 'seed=4242' \
+            https://track-to-market-ai.jerryquinet.workers.dev/api/image)
+          python - "$status" <<'PY'
+          import json, sys
+          status = int(sys.argv[1])
+          with open('response.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          if status != 200:
+              raise SystemExit(f"HTTP {status}: {data.get('error', data)}")
+          data_url = data.get('dataUrl', '')
+          if not data_url.startswith('data:image/') or len(data_url) < 1000:
+              raise SystemExit('Response did not contain a valid generated image data URL.')
+          print('AI IMAGE SMOKE OK')
+          print('model:', data.get('model'))
+          print('seed:', data.get('seed'))
+          print('dimensions:', data.get('width'), 'x', data.get('height'))
+          print('dataUrl length:', len(data_url))
+          PY
