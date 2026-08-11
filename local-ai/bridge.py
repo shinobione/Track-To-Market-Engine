@@ -29,6 +29,13 @@ ALLOWED_ORIGINS = {
     "http://127.0.0.1:4173",
 }
 
+FAVICON_SVG = b'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<rect width="64" height="64" rx="18" fill="#081014"/>
+<rect x="1" y="1" width="62" height="62" rx="17" fill="none" stroke="#38d7e8" stroke-opacity=".45" stroke-width="2"/>
+<text x="32" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" letter-spacing="-1" fill="#f5f8fa">TM</text>
+<circle cx="49" cy="18" r="3" fill="#38d7e8"/>
+</svg>'''
+
 
 def http_json(url: str, data=None, timeout=10):
     headers = {"Content-Type": "application/json"} if data is not None else {}
@@ -39,7 +46,16 @@ def http_json(url: str, data=None, timeout=10):
 
 
 def comfy_health():
-    return http_json(f"{COMFY}/system_stats", timeout=1.5)
+    try:
+        return http_json(f"{COMFY}/system_stats", timeout=8)
+    except Exception as stats_exc:
+        # `/system_stats` can be slow during the first CUDA/model initialization.
+        # A responsive `/queue` still proves that the ComfyUI HTTP API is alive.
+        try:
+            http_json(f"{COMFY}/queue", timeout=3)
+            return {"devices": [], "degraded": True, "stats_error": str(stats_exc)}
+        except Exception:
+            raise stats_exc
 
 
 def load_workflow():
@@ -88,8 +104,10 @@ def prepare_workflow(prompt: str, width: int, height: int, seed: int):
     elif "noise_seed" in sampler_inputs:
         sampler_inputs["noise_seed"] = int(seed)
     latent_inputs = nodes["latent"][1]["inputs"]
-    if "width" in latent_inputs: latent_inputs["width"] = int(width)
-    if "height" in latent_inputs: latent_inputs["height"] = int(height)
+    if "width" in latent_inputs:
+        latent_inputs["width"] = int(width)
+    if "height" in latent_inputs:
+        latent_inputs["height"] = int(height)
     nodes["save"][1]["inputs"]["filename_prefix"] = f"TTME_{seed}"
     return workflow
 
@@ -129,7 +147,7 @@ def fetch_image(ref):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "TTME-Local-AI/0.1.2"
+    server_version = "TTME-Local-AI/0.1.3"
 
     def cors(self):
         origin = self.headers.get("Origin") or ""
@@ -150,12 +168,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def send_bytes(self, status, payload, content_type):
+        self.send_response(status)
+        self.cors()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.cors()
         self.end_headers()
 
     def do_GET(self):
+        if self.path in ("/favicon.ico", "/favicon.svg"):
+            return self.send_bytes(200, FAVICON_SVG, "image/svg+xml")
         if self.path != "/health":
             return self.send_json(404, {"error": "Not found"})
         try:
@@ -171,10 +199,17 @@ class Handler(BaseHTTPRequestHandler):
                 "model": "workflow_api.json" if ready else None,
                 "gpu": device.get("name"),
                 "vram": device.get("vram_total"),
+                "degradedStats": bool(stats.get("degraded")),
                 "message": "Ready" if ready else "ComfyUI online; workflow_api.json missing",
             })
         except Exception as exc:
-            self.send_json(200, {"ok": True, "ready": False, "service": "TTME Local AI", "backend": "ComfyUI", "message": f"ComfyUI offline: {exc}"})
+            self.send_json(200, {
+                "ok": True,
+                "ready": False,
+                "service": "TTME Local AI",
+                "backend": "ComfyUI",
+                "message": f"ComfyUI offline: {exc}",
+            })
 
     def do_POST(self):
         if self.path != "/api/image":
@@ -190,7 +225,13 @@ class Handler(BaseHTTPRequestHandler):
             seed = max(1, int(payload.get("seed", 1)))
             workflow = prepare_workflow(prompt, width, height, seed)
             ref = queue_and_wait(workflow)
-            self.send_json(200, {"dataUrl": fetch_image(ref), "model": "ComfyUI local workflow", "seed": seed, "width": width, "height": height})
+            self.send_json(200, {
+                "dataUrl": fetch_image(ref),
+                "model": "ComfyUI local workflow",
+                "seed": seed,
+                "width": width,
+                "height": height,
+            })
         except Exception as exc:
             self.send_json(500, {"error": str(exc)})
 
@@ -199,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"Track-To-Market Local AI bridge → http://{HOST}:{PORT}")
-    print(f"ComfyUI backend → {COMFY}")
-    print(f"Workflow → {WORKFLOW_PATH}")
+    print(f"Track-To-Market Local AI bridge -> http://{HOST}:{PORT}")
+    print(f"ComfyUI backend -> {COMFY}")
+    print(f"Workflow -> {WORKFLOW_PATH}")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
