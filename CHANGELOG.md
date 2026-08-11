@@ -7,7 +7,9 @@
 - Installer downloads the official ComfyUI Portable NVIDIA package with resumable transfers and extracts it locally.
 - Added the ready-to-run `local-ai/workflow_api.json` baseline for SD3.5 Medium.
 - Installer offers the Comfy-Org `sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors` checkpoint after explicit license acknowledgement and verifies its published SHA256.
-- Hardened `START_LOCAL_AI.bat` with ComfyUI/model/workflow preflight checks, duplicate-process avoidance and a longer GPU startup window.
+- Hardened `START_LOCAL_AI.bat` with ComfyUI/model/workflow preflight checks, duplicate-process avoidance, a longer GPU startup window, robust TCP readiness probes for ports `8188` / `8789`, and bridge readiness waiting before opening the health page.
+- Hardened local bridge health detection: `/system_stats` now has a realistic timeout and falls back to the lighter `/queue` endpoint during slow first CUDA/model initialization.
+- Added a shared Track-To-Market `TM` favicon to GitHub Pages / PWA metadata and to the localhost bridge (`/favicon.ico`).
 - Rewrote `local-ai/README.md` around the double-click installation path and real-user smoke-test criteria.
 
 ### Validation status
