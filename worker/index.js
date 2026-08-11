@@ -1,4 +1,5 @@
-const IMAGE_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
+const QUALITY_MODEL = '@cf/black-forest-labs/flux-2-dev';
+const FAST_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
 
 const defaultOrigins = [
   'https://shinobione.github.io',
@@ -42,6 +43,21 @@ function assertOrigin(request, env) {
   if (!allowedOrigins(env).has(origin)) throw new Error('Origin not allowed.');
 }
 
+function classifyError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/your output has been flagged|output has been flagged|\b303\b/i.test(message)) {
+    return {
+      status: 422,
+      code: 'CONTENT_FLAGGED',
+      error: 'Cette variante a été rejetée par la modération du modèle. Une nouvelle seed ou une direction plus abstraite peut être relancée automatiquement.',
+    };
+  }
+  if (/quota|neurons|limit exceeded|rate limit/i.test(message)) {
+    return { status: 429, code: 'AI_QUOTA', error: message };
+  }
+  return { status: 500, code: 'AI_ERROR', error: message };
+}
+
 async function generateImage(request, env) {
   assertOrigin(request, env);
   const incoming = await request.formData();
@@ -49,6 +65,8 @@ async function generateImage(request, env) {
   const width = Math.min(1920, Math.max(256, Number(incoming.get('width') || 1024)));
   const height = Math.min(1920, Math.max(256, Number(incoming.get('height') || 768)));
   const seed = Math.min(9999999999, Math.max(1, Number(incoming.get('seed') || 1)));
+  const profile = String(incoming.get('profile') || 'quality') === 'fast' ? 'fast' : 'quality';
+  const model = profile === 'quality' ? QUALITY_MODEL : FAST_MODEL;
 
   if (!prompt) return json(request, env, { error: 'Prompt is required.' }, 400);
 
@@ -57,7 +75,8 @@ async function generateImage(request, env) {
   modelForm.append('width', String(Math.round(width)));
   modelForm.append('height', String(Math.round(height)));
   modelForm.append('seed', String(Math.round(seed)));
-  modelForm.append('guidance', '3.5');
+  modelForm.append('guidance', profile === 'quality' ? '3.3' : '3.5');
+  if (profile === 'quality') modelForm.append('steps', '8');
 
   for (let index = 0; index < 4; index++) {
     const candidate = incoming.get(`reference_${index}`);
@@ -70,7 +89,7 @@ async function generateImage(request, env) {
   const contentType = serialized.headers.get('content-type');
   if (!contentType || !serialized.body) throw new Error('Unable to serialize image request.');
 
-  const result = await env.AI.run(IMAGE_MODEL, {
+  const result = await env.AI.run(model, {
     multipart: {
       body: serialized.body,
       contentType,
@@ -81,7 +100,8 @@ async function generateImage(request, env) {
 
   return json(request, env, {
     dataUrl: `data:image/jpeg;base64,${result.image}`,
-    model: IMAGE_MODEL,
+    model,
+    profile,
     seed: Math.round(seed),
     width: Math.round(width),
     height: Math.round(height),
@@ -101,8 +121,10 @@ export default {
         return json(request, env, {
           ok: true,
           service: 'SHINOBIWAN Track-To-Market AI',
-          version: '0.1.0',
-          imageModel: IMAGE_MODEL,
+          version: '0.1.1',
+          imageModel: QUALITY_MODEL,
+          fastImageModel: FAST_MODEL,
+          qualitySteps: 8,
           allocation: 'Cloudflare Workers AI free allocation',
         });
       }
@@ -113,7 +135,8 @@ export default {
 
       return json(request, env, { error: 'Not found.' }, 404);
     } catch (error) {
-      return json(request, env, { error: error instanceof Error ? error.message : String(error) }, 500);
+      const classified = classifyError(error);
+      return json(request, env, { error: classified.error, code: classified.code }, classified.status);
     }
   },
 };
