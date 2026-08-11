@@ -17,6 +17,16 @@ FLUX.2 [klein] 4B
 
 Le Worker est séparé de `launchpad-media` et `launchpad-r2-api`.
 
+## État validé — 2026-08-11
+
+- Worker `track-to-market-ai` déployé avec succès.
+- Version Cloudflare : `2aba36ec-79ac-4734-afc8-8d9bafaa7ca3`.
+- Binding `env.AI` confirmé par Wrangler.
+- `/health` validé avec `@cf/black-forest-labs/flux-2-klein-4b`.
+- Smoke test réel `/api/image` validé : 512×512, seed `4242`, image retournée correctement.
+- GitHub Pages déployé avec succès depuis `main`.
+- URL publique : `https://shinobione.github.io/Track-To-Market-Engine/`.
+
 ## Pourquoi ChatGPT Plus / Google AI Plus ne sont pas branchés directement
 
 Les abonnements grand public donnent accès à la génération d'images dans leurs applications respectives, mais ne fournissent pas automatiquement des crédits API réutilisables par une PWA tierce.
@@ -87,13 +97,9 @@ Le ZIP conserve `external-ai` comme provenance afin de ne pas confondre une imag
 
 ## GitHub Pages
 
-Après validation du Worker et merge de la PR :
+Source : GitHub Actions depuis `main`.
 
-1. aller dans **Settings → Pages** ;
-2. sélectionner **GitHub Actions** comme source si nécessaire ;
-3. le workflow `Deploy GitHub Pages` publiera la branche `main`.
-
-URL cible :
+URL publique :
 
 ```text
 https://shinobione.github.io/Track-To-Market-Engine/

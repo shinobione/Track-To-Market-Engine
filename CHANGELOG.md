@@ -26,6 +26,15 @@
 - Kept the browser Canvas engine only as an explicit degraded fallback.
 - Preserved an architecture that can be integrated natively into SHINOBIWAN Studio.
 
+### Verified deployment — 2026-08-11
+- Dedicated Worker deployed successfully with `env.AI` binding.
+- Worker version ID: `2aba36ec-79ac-4734-afc8-8d9bafaa7ca3`.
+- `/health` smoke test passed with FLUX.2 [klein] 4B reported as the active image model.
+- Real `/api/image` smoke test passed at 512×512 with seed `4242`.
+- Generated response contained a valid image data URL (`172727` characters in the smoke run).
+- GitHub Pages build and deployment passed for commit `ae7f56dec9b9fedf3ef592e65dbc785555cf1922`.
+- Published URL: `https://shinobione.github.io/Track-To-Market-Engine/`.
+
 ### Cost / quota note
 - GitHub Pages hosting remains free.
 - Cloudflare Workers AI currently includes a daily free allocation; it is not unlimited.
