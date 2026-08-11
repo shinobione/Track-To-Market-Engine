@@ -11,21 +11,76 @@ track-to-market-ai.jerryquinet.workers.dev
         v
 Cloudflare Workers AI
         |
+        +--> FLUX.2 [dev] · quality · 8 steps (default)
+        +--> FLUX.2 [klein] 4B · fast fallback
+        |
         v
-FLUX.2 [klein] 4B
+Browser branding compositor
+exact track title + real artist logo
 ```
 
 Le Worker est séparé de `launchpad-media` et `launchpad-r2-api`.
 
-## État validé — 2026-08-11
+## Pourquoi le branding n'est plus généré par l'IA
+
+À partir de V0.1.1, FLUX ne reçoit plus la mission de dessiner le titre exact ou le logo SHINOBIWAN. Il génère uniquement l'artwork de fond.
+
+Le navigateur ajoute ensuite :
+
+- le titre exact ;
+- le vrai logo uploadé, sans le redessiner ;
+- une zone de contraste légère pour conserver la lisibilité.
+
+La source artwork sans branding est conservée dans chaque variation afin que les déclinaisons 1:1 / 9:16 puissent être recomposées proprement par l'IA avant de recevoir le même branding exact.
+
+## Profils Workers AI
+
+### `quality` — défaut
+
+- modèle : `@cf/black-forest-labs/flux-2-dev` ;
+- `steps=8` ;
+- `guidance=3.3` ;
+- utilisé par le frontend V0.1.1.
+
+### `fast`
+
+- modèle : `@cf/black-forest-labs/flux-2-klein-4b` ;
+- 4 steps fixes côté modèle ;
+- conservé comme profil rapide/fallback côté Worker.
+
+Le profil `quality` consomme davantage de Neurons. Le choix de 8 steps vise un compromis permettant approximativement un workflow personnel complet dans l'allocation gratuite quotidienne actuelle, selon le nombre de générations/retries effectués.
+
+## Gestion du `output flagged` / code 303
+
+Le message Cloudflare `Your output has been flagged` ne signifie pas que le Worker est mort.
+
+Le Worker V0.1.1 classe ce cas comme :
+
+```text
+HTTP 422
+code: CONTENT_FLAGGED
+```
+
+Le frontend :
+
+1. garde les variantes déjà générées ;
+2. change la seed ;
+3. retente avec une direction plus abstraite / object-focused et explicitement non-explicite ;
+4. continue le batch même si un slot reste rejeté après retries.
+
+Le message UI ne doit donc plus afficher `Moteur IA indisponible` pour un simple rejet de sortie.
+
+## État validé V0.1 — 2026-08-11
 
 - Worker `track-to-market-ai` déployé avec succès.
-- Version Cloudflare : `2aba36ec-79ac-4734-afc8-8d9bafaa7ca3`.
+- Version Cloudflare initiale : `2aba36ec-79ac-4734-afc8-8d9bafaa7ca3`.
 - Binding `env.AI` confirmé par Wrangler.
-- `/health` validé avec `@cf/black-forest-labs/flux-2-klein-4b`.
+- `/health` validé.
 - Smoke test réel `/api/image` validé : 512×512, seed `4242`, image retournée correctement.
 - GitHub Pages déployé avec succès depuis `main`.
 - URL publique : `https://shinobione.github.io/Track-To-Market-Engine/`.
+
+La version Worker V0.1.1 doit être redéployée après merge afin d'activer le profil FLUX.2 [dev] et la classification `CONTENT_FLAGGED`.
 
 ## Pourquoi ChatGPT Plus / Google AI Plus ne sont pas branchés directement
 
@@ -34,76 +89,42 @@ Les abonnements grand public donnent accès à la génération d'images dans leu
 Track-To-Market conserve donc deux chemins :
 
 1. **Automatique** — FLUX.2 via Cloudflare Workers AI.
-2. **Abonnements existants** — copier le Cover Prompt, générer l'image dans ChatGPT Images ou Google Flow, puis utiliser `Importer covers ChatGPT / Flow` dans Track-To-Market. Jusqu'à quatre images peuvent être importées dans la galerie.
+2. **Abonnements existants** — copier le Cover Prompt, générer l'artwork dans ChatGPT Images ou Google Flow, puis utiliser `Importer covers ChatGPT / Flow` dans Track-To-Market.
 
-Une cover importée est considérée comme une vraie cover IA externe. Elle peut être sélectionnée, prévisualisée et exportée. Si le Worker FLUX est disponible, `Adapter 1:1 + 9:16` utilise la cover importée comme image de référence et conserve son identité visuelle.
+Le Cover Prompt V0.1.1 demande volontairement **un artwork sans texte ni logo**. Après import, Track-To-Market applique lui-même le titre et le logo exacts.
 
-## Première mise en service Cloudflare
+## Déploiement Cloudflare
 
 Dans GitHub :
 
-1. Ouvrir `shinobione/Track-To-Market-Engine`.
-2. Aller dans **Settings → Environments**.
-3. Créer l'environnement `cloudflare-production` s'il n'existe pas.
-4. Dans cet environnement, ajouter les secrets :
-   - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_API_TOKEN`
-5. Le token doit permettre le déploiement de Workers sur le compte Cloudflare concerné et l'utilisation du binding Workers AI.
-6. Ouvrir **Actions → Deploy Track-To-Market AI Worker → Run workflow**.
-7. Saisir exactement `DEPLOY` dans le champ de confirmation.
-8. Lancer le workflow et vérifier que le job `Deploy Worker` est vert.
+1. ouvrir `shinobione/Track-To-Market-Engine` ;
+2. **Settings → Environments → cloudflare-production** ;
+3. vérifier les secrets `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN` ;
+4. ouvrir **Actions → Deploy Track-To-Market AI Worker → Run workflow** ;
+5. choisir `main` ;
+6. saisir exactement `DEPLOY` ;
+7. lancer le workflow.
 
-Le workflow utilise :
+Le workflow utilise Node 22 et :
 
 ```text
 npx wrangler@4.115.0 deploy --config worker/wrangler.toml
 ```
 
-Il exécute ensuite automatiquement un smoke test sur `/health` avec cinq tentatives avant d'échouer.
+Il exécute ensuite automatiquement un smoke test `/health`.
 
-## Smoke test Worker
+## Test utilisateur V0.1.1
 
-Après déploiement, ouvrir :
-
-```text
-https://track-to-market-ai.jerryquinet.workers.dev/health
-```
-
-La réponse doit indiquer `ok: true` et le modèle FLUX.2.
-
-Ensuite tester depuis Track-To-Market :
-
-1. saisir titre + genre ;
-2. générer le Release Pack ;
-3. cliquer `Créer 4 variations IA · FLUX.2` ;
-4. sélectionner une cover ;
-5. cliquer `Adapter 1:1 + 9:16` ;
-6. exporter le ZIP.
-
-## Réutiliser ChatGPT Images / Google Flow
-
-Si tu veux consommer les générations déjà comprises dans tes abonnements grand public :
-
-1. copier le `Cover Prompt` depuis Track-To-Market ;
-2. le coller dans ChatGPT Images ou Google Flow ;
-3. générer une à quatre propositions ;
-4. enregistrer les images ;
-5. revenir dans Track-To-Market ;
-6. cliquer `Importer covers ChatGPT / Flow` et sélectionner jusqu'à quatre images ;
-7. choisir la cover retenue ;
-8. utiliser `Adapter 1:1 + 9:16` si FLUX est disponible, ou exporter directement la cover + les textes.
-
-Le ZIP conserve `external-ai` comme provenance afin de ne pas confondre une image importée avec une génération Workers AI.
-
-## GitHub Pages
-
-Source : GitHub Actions depuis `main`.
-
-URL publique :
-
-```text
-https://shinobione.github.io/Track-To-Market-Engine/
-```
+1. saisir titre + genre + direction ;
+2. générer/recalculer le Release Pack ;
+3. cliquer `Créer 4 variations IA · Qualité` ;
+4. vérifier la diversité des 4 artworks ;
+5. vérifier que titre et logo sont parfaitement lisibles et identiques entre variantes ;
+6. cliquer `Régénérer 4 nouvelles covers` sans refresh ;
+7. sélectionner une cover ;
+8. cliquer `Adapter 1:1 + 9:16` ;
+9. exporter le ZIP ;
+10. rafraîchir volontairement la page et vérifier que les inputs du brouillon sont restaurés.
 
 ## Garde-fous
 
@@ -112,4 +133,4 @@ https://shinobione.github.io/Track-To-Market-Engine/
 - le Worker Track-To-Market reste séparé des Workers LaunchPAD ;
 - pas d'écriture R2/canonique dans cette phase ;
 - Canvas reste un fallback explicite uniquement ;
-- les images importées depuis ChatGPT/Flow ne sont jamais prétendues avoir été générées par FLUX.
+- les images importées depuis ChatGPT/Flow restent identifiées `external-ai` dans le ZIP.
