@@ -45,17 +45,19 @@ if not exist "%PYTHON%" (
   exit /b 1
 )
 
-powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8188/system_stats ^| Out-Null; exit 0 } catch { exit 1 }"
+rem Probe TCP directement avec le Python embarque. Plus robuste qu'Invoke-WebRequest
+rem sur certaines configurations Windows / PowerShell.
+"%PYTHON%" -c "import socket; s=socket.create_connection(('127.0.0.1',8188),2); s.close()" >nul 2>&1
 if errorlevel 1 (
   echo [1/2] Demarrage ComfyUI NVIDIA - profil RTX 12 GB...
   start "ComfyUI - TTME" /D "%COMFY_ROOT%" "%PYTHON%" -s "%COMFY_ROOT%\ComfyUI\main.py" --windows-standalone-build --lowvram --preview-method none
   echo      Attente du serveur ComfyUI... premier demarrage parfois long.
   for /L %%i in (1,1,240) do (
     timeout /t 2 /nobreak >nul
-    powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8188/system_stats ^| Out-Null; exit 0 } catch { exit 1 }"
+    "%PYTHON%" -c "import socket; s=socket.create_connection(('127.0.0.1',8188),2); s.close()" >nul 2>&1
     if not errorlevel 1 goto comfy_ready
   )
-  echo [STOP] ComfyUI n'a pas repondu apres environ 8 minutes.
+  echo [STOP] ComfyUI n'a pas ouvert le port 8188 apres environ 8 minutes.
   echo Regarde la fenetre ComfyUI pour voir l'erreur GPU / CUDA / VRAM eventuelle.
   pause
   exit /b 1
@@ -64,15 +66,30 @@ if errorlevel 1 (
 )
 
 :comfy_ready
-powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8789/health ^| Out-Null; exit 0 } catch { exit 1 }"
+echo      ComfyUI detecte sur 127.0.0.1:8188.
+"%PYTHON%" -c "import socket; s=socket.create_connection(('127.0.0.1',8789),2); s.close()" >nul 2>&1
 if errorlevel 1 (
   echo [2/2] Demarrage du bridge Track-To-Market sur 127.0.0.1:8789...
-  start "TTME Local AI Bridge" "%PYTHON%" "%~dp0bridge.py"
-  timeout /t 2 /nobreak >nul
+  start "TTME Local AI Bridge" /D "%~dp0" "%PYTHON%" -u "%~dp0bridge.py"
+  echo      Attente du bridge TTME...
+  for /L %%i in (1,1,60) do (
+    timeout /t 1 /nobreak >nul
+    "%PYTHON%" -c "import socket; s=socket.create_connection(('127.0.0.1',8789),2); s.close()" >nul 2>&1
+    if not errorlevel 1 goto bridge_ready
+  )
+  echo [STOP] Le bridge TTME n'a pas ouvert le port 8789 apres 60 secondes.
+  echo Regarde la fenetre "TTME Local AI Bridge" pour l'erreur Python eventuelle.
+  echo Tu peux aussi lancer manuellement:
+  echo   "%PYTHON%" -u "%~dp0bridge.py"
+  pause
+  exit /b 1
 ) else (
   echo [2/2] Bridge Track-To-Market deja en ligne.
 )
 
+:bridge_ready
+echo      Bridge TTME detecte sur 127.0.0.1:8789.
+timeout /t 1 /nobreak >nul
 start "" "http://127.0.0.1:8789/health"
 echo.
 echo OK - Garde les fenetres ComfyUI et TTME Local AI ouvertes pendant les generations.
