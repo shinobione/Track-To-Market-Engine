@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Deploy Worker
         run: npx wrangler@4.115.0 deploy --config worker/wrangler.toml
         env:
