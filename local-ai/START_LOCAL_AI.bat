@@ -49,13 +49,13 @@ powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -Timeou
 if errorlevel 1 (
   echo [1/2] Demarrage ComfyUI NVIDIA - profil RTX 12 GB...
   start "ComfyUI - TTME" /D "%COMFY_ROOT%" "%PYTHON%" -s "%COMFY_ROOT%\ComfyUI\main.py" --windows-standalone-build --lowvram --preview-method none
-  echo      Attente du serveur ComfyUI...
-  for /L %%i in (1,1,90) do (
+  echo      Attente du serveur ComfyUI... premier demarrage parfois long.
+  for /L %%i in (1,1,240) do (
     timeout /t 2 /nobreak >nul
     powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8188/system_stats ^| Out-Null; exit 0 } catch { exit 1 }"
     if not errorlevel 1 goto comfy_ready
   )
-  echo [STOP] ComfyUI n'a pas repondu dans le delai.
+  echo [STOP] ComfyUI n'a pas repondu apres environ 8 minutes.
   echo Regarde la fenetre ComfyUI pour voir l'erreur GPU / CUDA / VRAM eventuelle.
   pause
   exit /b 1
