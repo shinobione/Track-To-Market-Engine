@@ -20,7 +20,7 @@ export interface ArtworkVariation {
   dataUrl: string;
   seed: number;
   aspectRatio: '16:9' | '1:1' | '9:16';
-  provider?: 'workers-ai' | 'local';
+  provider?: 'workers-ai' | 'external-ai' | 'local';
   model?: string;
 }
 
