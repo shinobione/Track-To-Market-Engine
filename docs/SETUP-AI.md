@@ -40,13 +40,16 @@ Dans GitHub :
    - `CLOUDFLARE_API_TOKEN`
 5. Le token doit permettre le déploiement de Workers sur le compte Cloudflare concerné et l'utilisation du binding Workers AI.
 6. Ouvrir **Actions → Deploy Track-To-Market AI Worker → Run workflow**.
-7. Vérifier que le job `Deploy Worker` est vert.
+7. Saisir exactement `DEPLOY` dans le champ de confirmation.
+8. Lancer le workflow et vérifier que le job `Deploy Worker` est vert.
 
 Le workflow utilise :
 
 ```text
 npx wrangler@4.115.0 deploy --config worker/wrangler.toml
 ```
+
+Il exécute ensuite automatiquement un smoke test sur `/health` avec cinq tentatives avant d'échouer.
 
 ## Smoke test Worker
 
@@ -66,6 +69,21 @@ Ensuite tester depuis Track-To-Market :
 4. sélectionner une cover ;
 5. cliquer `Adapter 1:1 + 9:16` ;
 6. exporter le ZIP.
+
+## Réutiliser ChatGPT Images / Google Flow
+
+Si tu veux consommer les générations déjà comprises dans tes abonnements grand public :
+
+1. copier le `Cover Prompt` depuis Track-To-Market ;
+2. le coller dans ChatGPT Images ou Google Flow ;
+3. générer une à quatre propositions ;
+4. enregistrer les images ;
+5. revenir dans Track-To-Market ;
+6. cliquer `Importer covers ChatGPT / Flow` et sélectionner jusqu'à quatre images ;
+7. choisir la cover retenue ;
+8. utiliser `Adapter 1:1 + 9:16` si FLUX est disponible, ou exporter directement la cover + les textes.
+
+Le ZIP conserve `external-ai` comme provenance afin de ne pas confondre une image importée avec une génération Workers AI.
 
 ## GitHub Pages
 
