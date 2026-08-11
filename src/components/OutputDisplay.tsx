@@ -30,6 +30,13 @@ const downloadBlob = (blob: Blob, filename: string) => {
 const dataUrlToBase64 = (url: string) => url.split(',')[1] || '';
 const extensionFor = (url: string) => url.startsWith('data:image/jpeg') ? 'jpg' : 'png';
 
+const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(reader.error || new Error('Unable to read imported cover.'));
+  reader.readAsDataURL(file);
+});
+
 export const OutputDisplay: React.FC<Props> = ({ pack, params, onPackChange, onRegenerate, onTrackAction }) => {
   const [variations, setVariations] = useState<ArtworkVariation[]>([]);
   const [active, setActive] = useState<number | null>(null);
@@ -66,6 +73,41 @@ export const OutputDisplay: React.FC<Props> = ({ pack, params, onPackChange, onR
     setTimeout(() => setCopied(null), 1400);
   };
 
+  const importExternalCovers = async (files?: FileList | null) => {
+    if (!files?.length) return;
+    const selected = Array.from(files).filter(file => file.type.startsWith('image/')).slice(0, 4);
+    if (!selected.length) {
+      setError('Sélectionne au moins une image générée dans ChatGPT Images ou Google Flow.');
+      return;
+    }
+
+    setError(null);
+    setGenerating(true);
+    try {
+      const imported: ArtworkVariation[] = [];
+      for (let index = 0; index < selected.length; index++) {
+        const dataUrl = await fileToDataUrl(selected[index]);
+        imported.push({
+          id: `external-${Date.now()}-${index}`,
+          dataUrl,
+          seed: makeSeed(params, index),
+          aspectRatio: '16:9',
+          provider: 'external-ai',
+          model: 'ChatGPT Images / Google Flow import',
+        });
+        onTrackAction();
+      }
+      setVariations(imported);
+      setFormats({});
+      setActive(0);
+      setEngine('ai');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const generateOne = async (mode: ArtworkEngine, index: number, aspectRatio: ArtworkVariation['aspectRatio'], seed: number, references: string[] = []) => {
     if (mode === 'ai') {
       const prompt = aspectRatio === '16:9' ? editedPrompt : buildFormatPrompt(params.title, aspectRatio);
@@ -97,7 +139,7 @@ export const OutputDisplay: React.FC<Props> = ({ pack, params, onPackChange, onR
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(mode === 'ai'
-        ? `Moteur IA indisponible : ${message} Le fallback local reste disponible, mais aucune cover procédurale n'est substituée silencieusement.`
+        ? `Moteur IA indisponible : ${message} Tu peux importer une cover générée avec ton abonnement ChatGPT/Google Flow, ou utiliser le fallback local explicite.`
         : message);
     } finally {
       setGenerating(false);
@@ -112,7 +154,7 @@ export const OutputDisplay: React.FC<Props> = ({ pack, params, onPackChange, onR
     setError(null);
 
     try {
-      const mode: ArtworkEngine = base.provider === 'workers-ai' ? 'ai' : 'local';
+      const mode: ArtworkEngine = base.provider === 'local' ? 'local' : 'ai';
       const references = mode === 'ai' ? [base.dataUrl] : [];
       const [square, story] = await Promise.all([
         generateOne(mode, index, '1:1', base.seed, references),
@@ -191,19 +233,21 @@ export const OutputDisplay: React.FC<Props> = ({ pack, params, onPackChange, onR
 
     <div className="output-grid">
       <section className="visual-column">
-        <div className="section-row"><b>Galerie de covers · vraie génération IA</b><span>{engine === 'ai' ? 'FLUX.2 klein 4B · Workers AI' : 'Fallback local explicite'}</span></div>
+        <div className="section-row"><b>Galerie de covers · vraie génération IA</b><span>{variations[active ?? -1]?.provider === 'external-ai' ? 'Import ChatGPT / Flow' : engine === 'ai' ? 'FLUX.2 klein 4B · Workers AI' : 'Fallback local explicite'}</span></div>
 
         {!variations.length && !generating ? <div className="art-empty">
           <div className="art-icon">◇</div>
-          <h3>FLUX.2 AI artwork engine</h3>
-          <p>4 vraies variations IA 16:9 générées via le Worker Cloudflare privé. Canvas n'est qu'un mode de secours.</p>
-          <Button onClick={() => generateVariations('ai')}>Créer 4 variations IA</Button>
+          <h3>AI artwork engine</h3>
+          <p>FLUX.2 génère automatiquement 4 covers. Tu peux aussi réutiliser les images générées avec tes abonnements ChatGPT Images ou Google Flow.</p>
+          <Button onClick={() => generateVariations('ai')}>Créer 4 variations IA · FLUX.2</Button>
+          <label className="button button-ghost external-import">Importer covers ChatGPT / Flow<input type="file" accept="image/*" multiple onChange={event => importExternalCovers(event.target.files)} /></label>
           <Button variant="ghost" onClick={() => generateVariations('local')}>Fallback local uniquement</Button>
         </div> :
           <div className="art-grid">{[0,1,2,3].map(index => <div key={variations[index]?.id || index} className={`art-card ${active === index ? 'active' : ''}`} onClick={() => variations[index] && setActive(index)}>{variations[index] ? <><img src={variations[index].dataUrl} alt={`Cover ${index + 1}`} /><div className="art-overlay"><Button onClick={() => setPreview(variations[index].dataUrl)}>Aperçu</Button><Button variant="ghost" onClick={() => generateFormats(index)} disabled={formatting !== null}>{formatting === index ? 'Adaptation…' : formats[index] ? '✓ Formats prêts' : 'Adapter 1:1 + 9:16'}</Button><Button variant="ghost" onClick={() => generateVideo(index)} disabled={videoBusy}>{videoBusy && active === index ? 'Encodage…' : 'Teaser 8s'}</Button></div></> : <div className="art-placeholder">{generating && variations.length === index ? (engine === 'ai' ? 'IA en génération…' : 'Fallback local…') : `VARIANT ${index + 1}`}</div>}</div>)}</div>}
         {generating && <Button variant="danger" onClick={() => { cancelRef.current = true; }}>Annuler la génération</Button>}
+        {active !== null && !formats[active] && <Button variant="ghost" onClick={exportZip}>Exporter la cover sélectionnée + textes</Button>}
 
-        {active !== null && formats[active] && <div className="format-panel"><div className="section-row"><b>Formats additionnels</b><span>{variations[active]?.provider === 'workers-ai' ? 'Référence IA conservée' : 'Seed locale verrouillée'}</span></div><div className="formats"><figure><img src={formats[active].square?.dataUrl} alt="Square cover"/><figcaption>1:1 · Square</figcaption></figure><figure className="story"><img src={formats[active].story?.dataUrl} alt="Story cover"/><figcaption>9:16 · Story / Reel</figcaption></figure></div><Button onClick={exportZip}>Exporter le pack complet .ZIP</Button></div>}
+        {active !== null && formats[active] && <div className="format-panel"><div className="section-row"><b>Formats additionnels</b><span>{variations[active]?.provider !== 'local' ? 'Référence IA conservée' : 'Seed locale verrouillée'}</span></div><div className="formats"><figure><img src={formats[active].square?.dataUrl} alt="Square cover"/><figcaption>1:1 · Square</figcaption></figure><figure className="story"><img src={formats[active].story?.dataUrl} alt="Story cover"/><figcaption>9:16 · Story / Reel</figcaption></figure></div><Button onClick={exportZip}>Exporter le pack complet .ZIP</Button></div>}
       </section>
 
       <section className="text-column">
