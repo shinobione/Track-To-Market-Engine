@@ -1,6 +1,8 @@
 import type { ArtworkVariation, GenerationParams } from '../types';
+import { composeArtworkBranding } from './branding';
 
 type Ratio = ArtworkVariation['aspectRatio'];
+export type AiProfile = 'quality' | 'fast';
 
 const AI_ENDPOINT = (import.meta.env.VITE_TTME_AI_ENDPOINT || 'https://track-to-market-ai.jerryquinet.workers.dev').replace(/\/+$/, '');
 
@@ -9,6 +11,27 @@ const ratioSize: Record<Ratio, [number, number]> = {
   '1:1': [1024, 1024],
   '9:16': [576, 1024],
 };
+
+const variationDirections = [
+  'cinematic editorial composition, one memorable visual idea, restrained negative space, sophisticated lighting, no generic music hardware',
+  'conceptual art direction using tactile materials, unusual scale and premium fashion-campaign restraint, no generic speakers or headphones',
+  'minimal high-end campaign frame with bold geometry, controlled asymmetry and distinctive color blocking, no stock poster look',
+  'surreal but believable visual metaphor with strong depth, premium photography sensibility and one clear focal subject, no cliché audio equipment',
+];
+
+export class AiArtworkError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'AiArtworkError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export const isAiContentFlagError = (error: unknown) => error instanceof AiArtworkError && error.code === 'CONTENT_FLAGGED';
 
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, payload = ''] = dataUrl.split(',');
@@ -41,12 +64,20 @@ export async function getAiHealth(): Promise<{ ok: boolean; model?: string; allo
   return response.json();
 }
 
+export function buildVariationPrompt(basePrompt: string, index: number, safeMode = false): string {
+  const safe = safeMode
+    ? 'Safety retry: keep the scene fully non-explicit and object/landscape/abstract focused; no people, anatomy, nudity, weapons, drugs or graphic content.'
+    : '';
+  return `${basePrompt} Variation direction: ${variationDirections[index % variationDirections.length]}. ${safe}`.trim();
+}
+
 export async function generateAiArtwork(
   params: GenerationParams,
   prompt: string,
   seed: number,
   aspectRatio: Ratio,
   references: string[] = [],
+  profile: AiProfile = 'quality',
 ): Promise<ArtworkVariation> {
   const [width, height] = ratioSize[aspectRatio];
   const form = new FormData();
@@ -54,12 +85,10 @@ export async function generateAiArtwork(
   form.append('width', String(width));
   form.append('height', String(height));
   form.append('seed', String(Math.max(1, seed >>> 0)));
+  form.append('profile', profile);
 
-  const sourceReferences = [...references];
-  if (params.logoBase64 && !sourceReferences.includes(params.logoBase64)) sourceReferences.push(params.logoBase64);
-
-  for (let index = 0; index < Math.min(4, sourceReferences.length); index++) {
-    const blob = await downscaleReference(sourceReferences[index]);
+  for (let index = 0; index < Math.min(4, references.length); index++) {
+    const blob = await downscaleReference(references[index]);
     form.append(`reference_${index}`, blob, `reference-${index}.png`);
   }
 
@@ -73,27 +102,33 @@ export async function generateAiArtwork(
     dataUrl?: string;
     model?: string;
     error?: string;
+    code?: string;
   };
 
   if (!response.ok || !payload.dataUrl) {
-    throw new Error(payload.error || `AI image generation failed (${response.status}).`);
+    throw new AiArtworkError(payload.error || `AI image generation failed (${response.status}).`, response.status, payload.code);
   }
+
+  const brandedDataUrl = await composeArtworkBranding(payload.dataUrl, params, aspectRatio);
 
   return {
     id: `${seed}-${aspectRatio}-${Date.now()}`,
-    dataUrl: payload.dataUrl,
+    dataUrl: brandedDataUrl,
+    sourceDataUrl: payload.dataUrl,
     seed,
     aspectRatio,
     provider: 'workers-ai',
-    model: payload.model || '@cf/black-forest-labs/flux-2-klein-4b',
+    model: payload.model || (profile === 'quality' ? '@cf/black-forest-labs/flux-2-dev' : '@cf/black-forest-labs/flux-2-klein-4b'),
   };
 }
 
-export function buildFormatPrompt(title: string, aspectRatio: Ratio): string {
+export function buildFormatPrompt(title: string, aspectRatio: Ratio, safeMode = false): string {
   return [
-    `Adapt the supplied selected cover artwork for the music track "${title}" to aspect ratio ${aspectRatio}.`,
-    'Preserve the exact visual identity, subject, palette, lighting, typography hierarchy and SHINOBIWAN branding.',
-    'Recompose intelligently for the new crop instead of stretching.',
-    'Do not invent a different cover concept.',
-  ].join(' ');
+    `Recompose the supplied artwork background for the music track context "${title}" to aspect ratio ${aspectRatio}.`,
+    'Preserve the visual identity, subject, palette, lighting and material language of the supplied image.',
+    'Artwork only: do not render any title, letters, words, logo, watermark or fake typography; exact branding is added after generation.',
+    'Recompose intelligently for the new crop instead of stretching, and preserve useful clean negative space near the lower-left area.',
+    'Do not invent a different cover concept or generic music hardware.',
+    safeMode ? 'Safety retry: keep the scene fully non-explicit, abstract/object/landscape focused, with no people, anatomy, nudity, weapons, drugs or graphic content.' : '',
+  ].filter(Boolean).join(' ');
 }
