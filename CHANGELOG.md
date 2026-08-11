@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.2 — 2026-08-11
+
+### Product direction
+- **ChatGPT Images / Google Flow / Gemini import is now the recommended final-cover path.**
+- Cloudflare FLUX is explicitly downgraded to **Cloud Draft** and uses the fast profile to preserve quota.
+- Added a first-class **Local AI** path intended for automatic, zero-per-generation-cost inference on the user's NVIDIA GPU.
+
+### Local AI bridge
+- Added `local-ai/bridge.py`, a zero-third-party-dependency localhost bridge over the official ComfyUI server API.
+- Added `START_LOCAL_AI.bat` double-click launcher using ComfyUI Portable's embedded Python.
+- Added `CHECK_LOCAL_AI.bat` health shortcut.
+- Bridge binds to `127.0.0.1:8789`, proxies ComfyUI on `127.0.0.1:8188`, auto-detects standard workflow nodes and returns generated images as data URLs.
+- Added CORS / Private-Network headers for the SHINOBIWAN GitHub Pages origin and local dev origins.
+- Launcher uses `--lowvram --preview-method none` as a conservative starting profile for 12 GB-class NVIDIA cards.
+- Stable Diffusion 3.5 Medium documented as the initial workflow candidate; model download remains manual because its official repository is license-gated.
+
+### Frontend
+- New provider hierarchy strip: **Quality / Local AI / Cloud Draft**.
+- Automatic localhost health detection every 15 seconds.
+- Premium prompt copy + multi-image import flow promoted to the primary action.
+- Local AI generation produces four covers when the bridge reports ready.
+- 1:1 and 9:16 are now deterministic local adaptations from the clean source artwork instead of spending cloud inference on format conversion.
+- ZIP metadata records `external-ai`, `local-ai`, or `workers-ai` provenance and V0.1.2 mode.
+- Existing title/logo deterministic compositor remains authoritative.
+
+### Safety / scope
+- No Studio production code changed in V0.1.2.
+- No R2 or LaunchPAD worker changed.
+- Cloudflare Worker remains available but is no longer marketed as final quality.
+- Local AI does not expose a LAN listener by default.
+
 ## 0.1.1 — 2026-08-11
 
 ### Quality / artwork
