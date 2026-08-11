@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.3 — 2026-08-11
+
+### Local AI installation
+- Added `local-ai/INSTALL_LOCAL_AI.bat` for a guided Windows/NVIDIA setup.
+- Installer downloads the official ComfyUI Portable NVIDIA package with resumable transfers and extracts it locally.
+- Added the ready-to-run `local-ai/workflow_api.json` baseline for SD3.5 Medium.
+- Installer offers the Comfy-Org `sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors` checkpoint after explicit license acknowledgement and verifies its published SHA256.
+- Hardened `START_LOCAL_AI.bat` with ComfyUI/model/workflow preflight checks, duplicate-process avoidance and a longer GPU startup window.
+- Rewrote `local-ai/README.md` around the double-click installation path and real-user smoke-test criteria.
+
+### Validation status
+- Branch CI passed npm install, TypeScript typecheck and Vite build before merge.
+- The local model is **not yet declared final-quality**: the next gate is a real machine smoke test and visual comparison of the same `Stick to You` prompt against ChatGPT Images / Google Flow.
+- No Studio, LaunchPAD, R2 or Cloudflare Worker code changed in this milestone.
+
 ## 0.1.2 — 2026-08-11
 
 ### Product direction
