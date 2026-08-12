@@ -19,16 +19,6 @@ function fitFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, 
   return minimum;
 }
 
-function drawArtistFallback(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, fill: string) {
-  ctx.save();
-  ctx.font = `750 ${size}px "Helvetica Neue", Inter, Arial, sans-serif`;
-  ctx.fillStyle = fill;
-  ctx.shadowColor = fill === '#111317' ? 'rgba(255,255,255,.28)' : 'rgba(0,0,0,.55)';
-  ctx.shadowBlur = size * 0.22;
-  ctx.fillText('SHINOBIWAN', x, y);
-  ctx.restore();
-}
-
 function averageLuminance(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
   try {
     const sampleWidth = Math.max(1, Math.min(48, Math.floor(width)));
@@ -47,28 +37,24 @@ function averageLuminance(ctx: CanvasRenderingContext2D, x: number, y: number, w
 }
 
 async function drawLogo(ctx: CanvasRenderingContext2D, params: GenerationParams, width: number, height: number, margin: number, fill: string) {
-  if (params.logoBase64) {
-    try {
-      const logo = await loadImage(params.logoBase64);
-      const maxLogoWidth = width * 0.18;
-      const maxLogoHeight = height * 0.085;
-      const scale = Math.min(maxLogoWidth / logo.width, maxLogoHeight / logo.height, 1);
-      const logoWidth = Math.max(1, Math.round(logo.width * scale));
-      const logoHeight = Math.max(1, Math.round(logo.height * scale));
-      const logoX = width - margin - logoWidth;
-      const logoY = margin;
-      ctx.save();
-      ctx.shadowColor = fill === '#111317' ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.58)';
-      ctx.shadowBlur = 12;
-      ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
-      ctx.restore();
-      return;
-    } catch {
-      // Fall through to a text fallback only when a supplied logo cannot be rendered.
-    }
+  if (!params.logoBase64) return;
+  try {
+    const logo = await loadImage(params.logoBase64);
+    const maxLogoWidth = width * 0.18;
+    const maxLogoHeight = height * 0.085;
+    const scale = Math.min(maxLogoWidth / logo.width, maxLogoHeight / logo.height, 1);
+    const logoWidth = Math.max(1, Math.round(logo.width * scale));
+    const logoHeight = Math.max(1, Math.round(logo.height * scale));
+    const logoX = width - margin - logoWidth;
+    const logoY = margin;
+    ctx.save();
+    ctx.shadowColor = fill === '#111317' ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.58)';
+    ctx.shadowBlur = 12;
+    ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
+    ctx.restore();
+  } catch {
+    // Never replace a missing/broken reference with invented pseudo-branding.
   }
-
-  drawArtistFallback(ctx, margin, margin + Math.max(16, Math.round(width * 0.018)), Math.max(13, Math.round(width * 0.015)), fill);
 }
 
 export async function composeArtworkBranding(
