@@ -2,32 +2,33 @@
 
 ## But
 
-Track-To-Market Engine est un module **AI-first** préparé pour une intégration track-centric dans `shinobione/shinobiwan-studio`.
+Track-To-Market Engine est un module track-centric préparé pour une intégration dans `shinobione/shinobiwan-studio` sans devenir une nouvelle autorité de données parallèle.
 
-Studio et Track-To-Market partagent React + Vite + TypeScript. Le frontend reste statique ; la génération de covers passe par un Worker Cloudflare séparé afin de ne jamais exposer de secret dans GitHub Pages.
+Le contrat V0.1.4 ajoute une règle importante avant V0.2 : **les assets DRAFT ne doivent jamais être confondus avec les assets FINAL**.
 
-## Topologie cible
+## Topologie actuelle
 
 ```text
 SHINOBIWAN Studio
-  -> TrackToMarketView
-  -> track-to-market-ai.jerryquinet.workers.dev
-  -> Cloudflare Workers AI / FLUX.2 [klein] 4B
+  -> Track-To-Market standalone / future native view
+       -> FINAL QUALITY: external premium import
+       -> LOCAL DRAFT: 127.0.0.1:8789 -> ComfyUI -> RTX
+       -> CLOUD DRAFT: dedicated Workers AI Worker -> FLUX.2
 ```
 
-Le Worker doit être protégé par Cloudflare Access en production personnelle. L'origin autorisée côté CORS est `https://shinobione.github.io`.
+Le frontend reste statique. Les providers DRAFT sont des outils d'idéation. Le chemin FINAL repose aujourd'hui sur un import premium validé par l'utilisateur.
 
-## Intégration native recommandée
+## Intégration V0.2 recommandée
 
-1. intégrer `releaseEngine.ts`, `aiArtwork.ts`, `studioBridge.ts` et les composants concernés dans Studio ;
-2. créer un `TrackToMarketView` ou `ReleaseWorkspace` ;
-3. l'ouvrir depuis le `TrackWorkspace` d'un `trackId` canonique ;
-4. hydrater les inputs avec les métadonnées / lyrics Studio ;
-5. enrichir la direction artistique avec SonicTrace quand disponible ;
-6. conserver l'export ZIP local ;
-7. toute écriture canonique future passe par Track Manager / services Studio existants.
+1. ajouter une entrée Track-To-Market depuis le Track Workspace d'un `trackId` canonique ;
+2. hydrater titre / genres / Suno prompt / direction / lyrics depuis les données Studio existantes ;
+3. ouvrir d'abord la standalone via son bridge afin de limiter le blast radius ;
+4. ne publier un résultat vers Studio que lorsque `releaseStatus === 'final'` ;
+5. refuser toute promotion automatique d'un provider `local-ai` / `workers-ai` en asset canonique ;
+6. conserver Track Manager / services Studio comme seules autorités d'écriture canoniques ;
+7. intégrer nativement les composants seulement après smoke réel du bridge track-centric.
 
-## Données attendues
+## Données d'entrée attendues
 
 Minimum :
 
@@ -43,9 +44,9 @@ Souhaitables :
 - cover canonique comme référence optionnelle
 - logo SHINOBIWAN
 
-## Bridge standalone temporaire
+## Bridge standalone
 
-La standalone accepte :
+La standalone accepte actuellement :
 
 ```text
 ?source=studio
@@ -57,36 +58,74 @@ La standalone accepte :
 &lyrics=<lyrics>
 ```
 
-Les longues lyrics ne doivent pas être transportées durablement en query string.
+Les longues lyrics ne doivent pas être transportées durablement en query string. V0.2 devra préférer `postMessage` / état partagé du workspace ou un contrat de bridge dédié.
 
-Elle peut publier :
+La standalone annonce sa disponibilité via :
 
 ```ts
 {
   type: 'shinobiwan:track-to-market:ready',
-  version: '0.1.0'
+  version: '0.1.x'
 }
 ```
 
-et lors de l'export :
+Lors d'un export FINAL uniquement, elle peut publier :
 
 ```ts
 {
   type: 'shinobiwan:track-to-market:pack',
-  version: '0.1.0',
+  version: '0.1.x',
   trackId,
   params,
   pack
 }
 ```
 
+Le ZIP V0.1.4 inclut en plus :
+
+```ts
+{
+  version: '0.1.4',
+  releaseStatus: 'final' | 'draft',
+  artworkProvider,
+  artworkModel,
+  mode,
+  publishToStudio: boolean
+}
+```
+
+## Finality gate
+
+- `external-ai` importé manuellement = éligible FINAL ;
+- `local-ai` = DRAFT ;
+- `workers-ai` = DRAFT ;
+- DRAFT peut être adapté en 1:1 / 9:16 et utilisé pour un teaser de preview ;
+- DRAFT peut être exporté en ZIP local explicitement nommé ;
+- DRAFT ne déclenche jamais `publishPackToStudio` ;
+- aucune écriture canonique ne doit dépendre d'un simple clic de génération.
+
 ## Garde-fous
 
 - aucune clé API dans le client ;
 - Worker AI séparé des Workers media/R2 existants ;
 - ne pas modifier `launchpad-media` ou `launchpad-r2-api` pour cette fonctionnalité ;
-- Cloudflare Access recommandé avant exposition de l'endpoint IA ;
 - pas de duplication de `lyrics.txt` ;
 - pas d'écriture R2 directe depuis Track-To-Market ;
-- Canvas local = secours explicite uniquement ;
-- ne jamais présenter le fallback Canvas comme une génération IA.
+- pas de provider DRAFT promu silencieusement en FINAL ;
+- Local AI reste loopback-only par défaut ;
+- toute persistance future passe par les services Studio / Track Manager existants.
+
+## V0.2 — premier incrément sûr
+
+Le premier incrément Studio doit rester petit :
+
+```text
+Track Workspace
+  -> action "Track-To-Market"
+  -> ouverture de la standalone avec trackId + métadonnées courtes
+  -> réception du ready/pack bridge
+  -> affichage du statut FINAL/DRAFT
+  -> aucune écriture canonique automatique
+```
+
+Une fois ce smoke validé, la vue pourra être intégrée nativement sans changer le contrat de finalité.
