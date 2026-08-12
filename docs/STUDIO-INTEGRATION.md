@@ -2,130 +2,139 @@
 
 ## But
 
-Track-To-Market Engine est un module track-centric préparé pour une intégration dans `shinobione/shinobiwan-studio` sans devenir une nouvelle autorité de données parallèle.
+Track-To-Market Engine est un module track-centric intégré à `shinobione/shinobiwan-studio` sans devenir une nouvelle autorité de données parallèle.
 
-Le contrat V0.1.4 ajoute une règle importante avant V0.2 : **les assets DRAFT ne doivent jamais être confondus avec les assets FINAL**.
+V0.2 conserve le finality gate et fait évoluer le bridge en **V3 / protocol 0.2.0** afin que Studio reçoive une vraie preview de la cover FINAL sélectionnée, pas seulement des textes/provenance.
 
-## Topologie actuelle
+## Topologie
 
 ```text
 SHINOBIWAN Studio
-  -> Track-To-Market standalone / future native view
-       -> FINAL QUALITY: external premium import
+  -> Track-To-Market standalone
+       -> PREMIUM FINAL: external provider + faithful import
        -> LOCAL DRAFT: 127.0.0.1:8789 -> ComfyUI -> RTX
-       -> CLOUD DRAFT: dedicated Workers AI Worker -> FLUX.2
+       -> CLOUD DRAFT: Workers AI -> FLUX.2
+  <- FINAL preview + provenance + release pack
 ```
 
-Le frontend reste statique. Les providers DRAFT sont des outils d'idéation. Le chemin FINAL repose aujourd'hui sur un import premium validé par l'utilisateur.
+Le frontend TTM reste statique. Local/Cloud restent des moteurs DRAFT. Le chemin FINAL repose sur un artwork premium validé/importé par l'utilisateur.
 
-## Intégration V0.2 recommandée
+## Entrée Studio -> TTM
 
-1. ajouter une entrée Track-To-Market depuis le Track Workspace d'un `trackId` canonique ;
-2. hydrater titre / genres / Suno prompt / direction / lyrics depuis les données Studio existantes ;
-3. ouvrir d'abord la standalone via son bridge afin de limiter le blast radius ;
-4. ne publier un résultat vers Studio que lorsque `releaseStatus === 'final'` ;
-5. refuser toute promotion automatique d'un provider `local-ai` / `workers-ai` en asset canonique ;
-6. conserver Track Manager / services Studio comme seules autorités d'écriture canoniques ;
-7. intégrer nativement les composants seulement après smoke réel du bridge track-centric.
-
-## Données d'entrée attendues
-
-Minimum :
-
-- `trackId`
-- `title`
-- `genres`
-
-Souhaitables :
-
-- lyrics canoniques `lyrics.txt`
-- prompt Suno / audioStyle
-- mood / instrumentation / énergie SonicTrace
-- cover canonique comme référence optionnelle
-- logo SHINOBIWAN
-
-## Bridge standalone
-
-La standalone accepte actuellement :
+Studio ouvre la standalone avec les métadonnées courtes :
 
 ```text
 ?source=studio
 &trackId=<canonical-track-id>
 &title=<title>
 &genres=Trap,R%26B
-&audioStyle=<suno-style>
-&style=<visual-direction>
-&lyrics=<lyrics>
 ```
 
-Les longues lyrics ne doivent pas être transportées durablement en query string. V0.2 devra préférer `postMessage` / état partagé du workspace ou un contrat de bridge dédié.
+Après handshake, le contexte complet voyage par `postMessage` :
 
-La standalone annonce sa disponibilité via :
+```ts
+{
+  type: 'shinobiwan:track-to-market:input',
+  version: '0.2.0',
+  input: {
+    trackId,
+    title,
+    genres,
+    audioStyle,
+    style,
+    lyrics,
+    artworkStrategy?
+  }
+}
+```
+
+Les longues lyrics ne sont donc pas transportées dans l'URL.
+
+## Ready handshake
+
+TTM annonce :
 
 ```ts
 {
   type: 'shinobiwan:track-to-market:ready',
-  version: '0.1.x'
+  version: '0.2.0',
+  accepts: 'shinobiwan:track-to-market:input',
+  capabilities: ['full-context', 'final-preview', 'provenance']
 }
 ```
 
-Lors d'un export FINAL uniquement, elle peut publier :
+Les origins restent allowlistés. Studio vérifie aussi que le message vient exactement de la `Window` enfant qu'il a ouverte.
+
+## FINAL return — Bridge V3
+
+Uniquement lors d'un export FINAL :
 
 ```ts
 {
   type: 'shinobiwan:track-to-market:pack',
-  version: '0.1.x',
+  version: '0.2.0',
   trackId,
+  releaseStatus: 'final',
+  artworkProvider,
+  artworkModel,
+  mode: 'quality-import',
+  artworkStrategy: 'integrated' | 'clean',
+  brandingMode: 'preserve' | 'logo-only' | 'editorial',
+  previewDataUrl, // JPEG compressée de l'artwork FINAL sélectionné
   params,
   pack
 }
 ```
 
-Le ZIP V0.1.4 inclut en plus :
+`previewDataUrl` sert uniquement au staging/review dans Studio. Elle n'autorise aucune écriture canonique automatique.
 
-```ts
-{
-  version: '0.1.4',
-  releaseStatus: 'final' | 'draft',
-  artworkProvider,
-  artworkModel,
-  mode,
-  publishToStudio: boolean
-}
-```
+## Premium logo reference
+
+Le logo uploadé dans TTM n'est pas transmis magiquement au provider externe par le prompt texte.
+
+V0.2 rend donc la règle explicite :
+
+- TTM indique que le fichier logo doit être **attaché comme image de référence** dans Flow / ChatGPT / Gemini ;
+- le prompt exige la fidélité au logo fourni ;
+- le fichier logo est téléchargeable depuis TTM ;
+- le ZIP FINAL contient aussi le logo de référence ;
+- sans référence logo, le provider et le compositor local ne doivent pas inventer un faux logo.
+
+## Import FINAL / branding
+
+Un artwork premium importé arrive en `brandingMode=preserve` : aucune modification automatique.
+
+Les traitements `logo-only` et `editorial` sont optionnels et réversibles. La source importée est conservée séparément.
 
 ## Finality gate
 
 - `external-ai` importé manuellement = éligible FINAL ;
 - `local-ai` = DRAFT ;
 - `workers-ai` = DRAFT ;
-- DRAFT peut être adapté en 1:1 / 9:16 et utilisé pour un teaser de preview ;
-- DRAFT peut être exporté en ZIP local explicitement nommé ;
-- DRAFT ne déclenche jamais `publishPackToStudio` ;
-- aucune écriture canonique ne doit dépendre d'un simple clic de génération.
+- DRAFT peut être adapté/exporté localement ;
+- DRAFT ne déclenche jamais le bridge FINAL ;
+- aucun clic de génération ne produit une écriture canonique.
 
-## Garde-fous
+## Autorité de données
 
-- aucune clé API dans le client ;
-- Worker AI séparé des Workers media/R2 existants ;
-- ne pas modifier `launchpad-media` ou `launchpad-r2-api` pour cette fonctionnalité ;
-- pas de duplication de `lyrics.txt` ;
-- pas d'écriture R2 directe depuis Track-To-Market ;
-- pas de provider DRAFT promu silencieusement en FINAL ;
-- Local AI reste loopback-only par défaut ;
-- toute persistance future passe par les services Studio / Track Manager existants.
+TTM ne :
 
-## V0.2 — premier incrément sûr
+- write pas R2 ;
+- n'appelle pas Track Manager pour muter un track ;
+- ne remplace pas une cover canonique ;
+- ne persiste pas automatiquement un release pack.
 
-Le premier incrément Studio doit rester petit :
+Studio / Track Manager restent les seules surfaces autorisées pour une future action explicite de persistance.
 
-```text
-Track Workspace
-  -> action "Track-To-Market"
-  -> ouverture de la standalone avec trackId + métadonnées courtes
-  -> réception du ready/pack bridge
-  -> affichage du statut FINAL/DRAFT
-  -> aucune écriture canonique automatique
-```
+## V0.2 Studio consumer
 
-Une fois ce smoke validé, la vue pourra être intégrée nativement sans changer le contrat de finalité.
+Le consumer Studio doit :
+
+1. vérifier origin + child window + matching `trackId` ;
+2. rejeter tout retour non-FINAL ;
+3. afficher la preview réelle ;
+4. afficher provider/model/strategy/branding provenance ;
+5. garder le résultat en mémoire pour review ;
+6. ne proposer aucune mutation implicite.
+
+Le premier consumer V3 est prévu pour Studio Build 47.
