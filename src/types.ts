@@ -1,3 +1,6 @@
+export type ArtworkStrategy = 'integrated' | 'clean';
+export type BrandingMode = 'preserve' | 'editorial' | 'logo-only';
+
 export interface GenerationParams {
   title: string;
   genres: string[];
@@ -6,6 +9,7 @@ export interface GenerationParams {
   lyrics: string;
   logoBase64?: string;
   trackId?: string;
+  artworkStrategy?: ArtworkStrategy;
 }
 
 export interface ReleasePack {
