@@ -1,46 +1,42 @@
 # SHINOBIWAN Track-To-Market Engine
 
-**Version 0.1.2 — Quality-first / Local-AI-ready / GitHub Pages / Studio-ready**
+**Version 0.1.4 — FINAL vs DRAFT / Quality-first / Local RTX / Studio-safe**
 
-Track-To-Market transforme les informations d'un morceau en **release pack exploitable** : direction de cover, images, formats 16:9 / 1:1 / 9:16, copy SoundCloud/social, tags, teaser et ZIP.
+Track-To-Market transforme les informations d'un morceau en release pack : direction visuelle, covers, formats 16:9 / 1:1 / 9:16, copy SoundCloud/social, tags, teaser et ZIP.
 
-## V0.1.2 — pivot qualité
+## Contrat produit V0.1.4
 
-Le smoke V0.1.1 a confirmé que FLUX.2 sur Workers AI est techniquement fiable mais **pas assez bon comme moteur de cover premium** comparé à ChatGPT Images / Google Flow / Gemini pour l'univers SHINOBIWAN.
+Les smoke tests réels ont validé le pipeline local, mais pas la qualité premium du modèle local actuel. La hiérarchie officielle est donc :
 
-La hiérarchie officielle devient donc :
-
-1. **QUALITÉ — recommandé** : génération dans ChatGPT Images / Google Flow / Gemini, puis import dans Track-To-Market.
-2. **LOCAL AI — gratuit et automatisable** : ComfyUI sur le PC / RTX, via un bridge localhost dédié.
-3. **CLOUD DRAFT** : Cloudflare Workers AI / FLUX.2 uniquement pour explorer rapidement une direction, jamais présenté comme qualité finale.
+1. **FINAL QUALITY** — ChatGPT Images / Google Flow / Gemini puis import dans Track-To-Market. Seul chemin automatiquement marqué FINAL.
+2. **LOCAL DRAFT** — ComfyUI + RTX via le bridge localhost. Gratuit par génération, destiné à l'idéation.
+3. **CLOUD DRAFT** — Cloudflare Workers AI / FLUX.2 pour exploration rapide uniquement.
 
 ```text
-                         +--> ChatGPT / Flow / Gemini --> import premium
-Track-To-Market / Studio |
-                         +--> 127.0.0.1:8789 --> ComfyUI --> RTX local
-                         |
-                         +--> Cloudflare Worker --> FLUX.2 --> draft
-                                      |
-                                      v
-                       deterministic title/logo branding
-                                      |
-                                      v
-                           formats + teaser + ZIP
+ChatGPT / Flow / Gemini -> import -> FINAL -> formats / teaser / ZIP -> Studio
+Local bridge / ComfyUI ----------> DRAFT -> previews / DRAFT ZIP only
+Cloudflare / FLUX.2 ------------> DRAFT -> previews / DRAFT ZIP only
 ```
+
+### Finality gate
+
+- chaque galerie et chaque cover indiquent FINAL ou DRAFT ;
+- Local AI et Cloudflare ne deviennent jamais FINAL automatiquement ;
+- un ZIP DRAFT conserve provider, modèle, mode et `releaseStatus=draft` ;
+- un ZIP DRAFT n'est pas publié au bridge Studio ;
+- seul un import premium peut produire un export FINAL et déclencher la publication Studio ;
+- titre et vrai logo restent composés localement de façon déterministe.
 
 ## Ce qui fonctionne
 
 - Cover Prompt anglais éditable ;
-- import jusqu'à 4 covers premium ;
-- détection automatique du bridge Local AI ;
-- contrat de génération locale compatible ComfyUI ;
-- Cloudflare rétrogradé en mode brouillon `fast` ;
-- titre exact + vrai logo composés localement, jamais redessinés par l'IA ;
-- adaptation 1:1 / 9:16 déterministe depuis l'artwork source ;
-- teaser 8 s WebM ;
-- description SoundCloud ≤ 140 ;
-- tags + caption ;
-- export ZIP avec provenance du moteur ;
+- import jusqu'à 4 covers premium FINAL ;
+- Local Draft réel via `127.0.0.1:8789` -> ComfyUI `127.0.0.1:8188` -> RTX ;
+- Cloud Draft via le Worker FLUX existant ;
+- adaptation 1:1 / 9:16 déterministe ;
+- teaser local 8 s WebM ;
+- SoundCloud ≤ 140 caractères, tags, social caption ;
+- export ZIP FINAL ou DRAFT avec provenance ;
 - autosave des inputs ;
 - bridge `trackId` prêt pour SHINOBIWAN Studio.
 
@@ -48,21 +44,18 @@ Track-To-Market / Studio |
 
 Voir [`local-ai/README.md`](local-ai/README.md).
 
-Le repo fournit :
-
 ```text
 local-ai/
-├── bridge.py
+├── INSTALL_LOCAL_AI.bat
 ├── START_LOCAL_AI.bat
 ├── CHECK_LOCAL_AI.bat
-└── workflow_api.json   # à exporter depuis ComfyUI
+├── bridge.py
+└── workflow_api.json
 ```
 
-Le bridge utilise l'API serveur locale ComfyUI et **aucune dépendance Python supplémentaire**. Le launcher réutilise le Python embarqué de ComfyUI Portable.
+Le workflow SD3.5 Medium actuel est un baseline de DRAFT. L'amélioration qualité locale est traitée séparément afin de ne pas brouiller le chemin FINAL.
 
-Le profil initial recommandé à tester est **Stable Diffusion 3.5 Medium**, puis nous validerons visuellement s'il mérite le rôle de moteur local final avant son intégration native dans Studio.
-
-## Développement frontend
+## Développement
 
 ```bash
 npm install
@@ -70,37 +63,26 @@ npm run dev
 npm run build
 ```
 
-## GitHub Pages
+GitHub Pages : `https://shinobione.github.io/Track-To-Market-Engine/`
 
-Le workflow `.github/workflows/deploy-pages.yml` publie `dist/` depuis `main`.
+## Sécurité / périmètre
 
-```text
-https://shinobione.github.io/Track-To-Market-Engine/
-```
-
-## Cloudflare Worker — draft uniquement
-
-Le Worker existant reste disponible mais n'est plus le chemin premium. Son déploiement demeure manuel via `Deploy Track-To-Market AI Worker` avec confirmation `DEPLOY`.
-
-Aucune clé API n'est exposée dans le frontend.
-
-## Sécurité locale
-
-- bridge lié uniquement à `127.0.0.1` ;
-- pas de LAN par défaut ;
-- CORS limité à GitHub Pages SHINOBIWAN + développement local ;
-- aucune clé OpenAI / Google / Cloudflare nécessaire pour Local AI ;
-- les modèles restent sur la machine.
+- aucune clé secrète dans GitHub Pages ;
+- bridge local lié uniquement à `127.0.0.1` ;
+- aucun write R2 direct depuis Track-To-Market ;
+- Worker AI séparé des Workers media/R2 ;
+- un asset DRAFT ne peut pas déclencher une publication finale Studio.
 
 ## Contrat Studio
 
 Voir [`docs/STUDIO-INTEGRATION.md`](docs/STUDIO-INTEGRATION.md).
 
-V0.1.2 prépare le contrat `localhost` sans encore modifier le repo Studio de production. Une fois le moteur local validé sur la RTX, Studio pourra détecter le bridge automatiquement et proposer le même workflow depuis le Track Workspace.
+V0.1.4 fige le finality gate avant V0.2 : Studio peut préremplir Track-To-Market depuis un `trackId`, mais seul un pack FINAL premium peut être renvoyé comme résultat final.
 
 ## Roadmap
 
-- **V0.1.2** — quality-first + Local AI bridge + Cloud Draft ;
-- **V0.1.3** — smoke réel RTX / choix définitif du workflow local / réglages qualité ;
-- **V0.2** — intégration native SHINOBIWAN Studio ;
+- **V0.1.4** — FINAL vs DRAFT + provenance stricte + Studio publish gate ;
+- **V0.2** — intégration track-centric dans SHINOBIWAN Studio ;
+- **V0.2.x** — persistance via les services Studio autorisés ;
+- **Local AI Lab** — checkpoints / LoRA / refine workflows pour améliorer les drafts ;
 - ensuite : enrichissement SonicTrace, texte IA optionnel, premium feel et micro-interactions.
