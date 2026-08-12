@@ -6,6 +6,7 @@ import './subscription-bridge.css';
 import './v0.1.1.css';
 import './v0.1.2.css';
 import './v0.1.4.css';
+import './v0.2.0.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
