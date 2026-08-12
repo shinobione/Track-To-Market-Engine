@@ -93,15 +93,22 @@ export function announceReady() {
   postToStudio({ type: MESSAGE_READY, version: BRIDGE_VERSION, accepts: MESSAGE_INPUT });
 }
 
-export function publishPackToStudio(params: GenerationParams, pack: ReleasePack, meta: StudioPackPublicationMeta) {
+export function publishPackToStudio(params: GenerationParams, pack: ReleasePack, meta?: StudioPackPublicationMeta) {
+  const publication = meta || {
+    releaseStatus: 'final' as const,
+    artworkProvider: 'external-ai',
+    artworkModel: 'Premium external import',
+    mode: 'quality-import',
+  };
+
   postToStudio({
     type: MESSAGE_PACK,
     version: BRIDGE_VERSION,
     trackId: params.trackId,
-    releaseStatus: meta.releaseStatus,
-    artworkProvider: meta.artworkProvider,
-    artworkModel: meta.artworkModel,
-    mode: meta.mode,
+    releaseStatus: publication.releaseStatus,
+    artworkProvider: publication.artworkProvider,
+    artworkModel: publication.artworkModel,
+    mode: publication.mode,
     params: { ...params, logoBase64: params.logoBase64 ? '[embedded image omitted]' : undefined },
     pack,
   });
