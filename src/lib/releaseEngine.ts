@@ -24,6 +24,7 @@ export function generateCoverPrompt(params: GenerationParams, variant = 0): stri
   const mood = inferMood(params).join(', ');
   const direction = clean(params.style) || 'modern cinematic editorial artwork';
   const audio = clean(params.audioStyle) || 'dynamic contemporary production';
+  const strategy = params.artworkStrategy || 'integrated';
   const compositions = [
     'bold editorial composition with one memorable focal idea and controlled negative space',
     'off-center composition with layered foreground/background depth and tactile material detail',
@@ -31,14 +32,25 @@ export function generateCoverPrompt(params: GenerationParams, variant = 0): stri
     'minimal conceptual composition with premium campaign restraint and distinctive geometry',
   ];
 
+  const providerLead = 'PREMIUM PROVIDER HANDOFF for ChatGPT Images, Google Flow/Gemini, or another high-quality image model.';
+  const logoInstruction = params.logoBase64
+    ? 'REFERENCE ASSET REQUIRED: a SHINOBIWAN logo image has been uploaded in Track-To-Market. ATTACH THAT LOGO FILE AS A REFERENCE IMAGE in the image-generation tool before generating. Treat the supplied logo as authoritative artwork: preserve its exact lettering, silhouette, proportions and visual identity; do not redraw, respell, reinterpret or invent a replacement logo.'
+    : 'No artist-logo reference image is supplied. Do not invent a fake SHINOBIWAN logo or pseudo-lettering.';
+
+  const typographyInstruction = strategy === 'clean'
+    ? 'CLEAN ARTWORK MODE: create artwork only. Do not render the track title, artist name, letters, logos, watermarks or fake typography. Keep useful negative space for optional later branding while ensuring the composition is visually complete without text.'
+    : `INTEGRATED ARTWORK MODE: render the exact track title “${clean(params.title)}” as an intentional part of the composition, with typography chosen to belong to the artwork rather than looking pasted on afterward. Keep spelling exact. ${params.logoBase64 ? 'Integrate the supplied SHINOBIWAN logo subtly as secondary branding using the attached reference image.' : 'Do not invent an artist logo.'} Avoid extra random words, fake labels or decorative pseudo-text.`;
+
   return [
-    `Create premium 16:9 artwork for the music track context “${clean(params.title)}”.`,
+    providerLead,
+    `Create premium 16:9 release artwork for the music track “${clean(params.title)}”.`,
     `Genres: ${genres}. Sonic character: ${audio}. Mood: ${mood}. Art direction: ${direction}.`,
+    logoInstruction,
+    typographyInstruction,
     `Use ${compositions[variant % compositions.length]}.`,
-    'ARTWORK BACKGROUND ONLY: do not render the track title, letters, words, logos, watermarks or fake typography. Exact title and artist branding will be composited after generation.',
-    'Leave useful clean negative space around the lower-left region for later title placement, while keeping the artwork visually complete without text.',
     'Avoid generic AI album-cover clichés: no random speakers, headphones, microphones, equalizers, vinyl records, glowing music notes or audio hardware unless explicitly requested by the art direction.',
-    'Prioritize a distinctive visual metaphor, coherent palette, believable materials, restrained bloom, detailed lighting and high-end editorial music-campaign finish.',
+    'Prioritize a distinctive visual metaphor, coherent palette, believable materials, restrained bloom, detailed lighting and a high-end editorial music-campaign finish.',
+    'Generate a finished composition that can be imported back into Track-To-Market without requiring a generic white title overlay.',
   ].join(' ');
 }
 

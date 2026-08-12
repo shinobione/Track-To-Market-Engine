@@ -1,9 +1,9 @@
-import type { GenerationParams, ReleasePack, StudioBridgeInput } from '../types';
+import type { ArtworkStrategy, BrandingMode, GenerationParams, ReleasePack, StudioBridgeInput } from '../types';
 
 const MESSAGE_READY = 'shinobiwan:track-to-market:ready';
 const MESSAGE_INPUT = 'shinobiwan:track-to-market:input';
 const MESSAGE_PACK = 'shinobiwan:track-to-market:pack';
-const BRIDGE_VERSION = '0.1.5';
+const BRIDGE_VERSION = '0.2.0';
 
 const ALLOWED_STUDIO_ORIGINS = [
   'https://shinobione.github.io',
@@ -18,6 +18,9 @@ export interface StudioPackPublicationMeta {
   artworkProvider?: string;
   artworkModel?: string;
   mode?: string;
+  artworkStrategy?: ArtworkStrategy;
+  brandingMode?: BrandingMode;
+  previewDataUrl?: string;
 }
 
 function bridgeTargets(): Window[] {
@@ -47,6 +50,7 @@ function normalizeBridgeInput(value: unknown): StudioBridgeInput | null {
   if (typeof raw.audioStyle === 'string') input.audioStyle = raw.audioStyle;
   if (typeof raw.style === 'string') input.style = raw.style;
   if (typeof raw.lyrics === 'string') input.lyrics = raw.lyrics;
+  if (raw.artworkStrategy === 'integrated' || raw.artworkStrategy === 'clean') input.artworkStrategy = raw.artworkStrategy;
 
   return input;
 }
@@ -74,6 +78,7 @@ export function mergeBridgeInput(base: GenerationParams, input: StudioBridgeInpu
     ...(input.style ? { style: input.style } : {}),
     ...(input.lyrics ? { lyrics: input.lyrics } : {}),
     ...(input.trackId ? { trackId: input.trackId } : {}),
+    ...(input.artworkStrategy ? { artworkStrategy: input.artworkStrategy } : {}),
   };
 }
 
@@ -90,7 +95,7 @@ export function subscribeStudioBridgeInput(onInput: (input: StudioBridgeInput) =
 }
 
 export function announceReady() {
-  postToStudio({ type: MESSAGE_READY, version: BRIDGE_VERSION, accepts: MESSAGE_INPUT });
+  postToStudio({ type: MESSAGE_READY, version: BRIDGE_VERSION, accepts: MESSAGE_INPUT, capabilities: ['full-context', 'final-preview', 'provenance'] });
 }
 
 export function publishPackToStudio(params: GenerationParams, pack: ReleasePack, meta?: StudioPackPublicationMeta) {
@@ -99,6 +104,8 @@ export function publishPackToStudio(params: GenerationParams, pack: ReleasePack,
     artworkProvider: 'external-ai',
     artworkModel: 'Premium external import',
     mode: 'quality-import',
+    artworkStrategy: params.artworkStrategy || 'integrated',
+    brandingMode: 'preserve' as const,
   };
 
   postToStudio({
@@ -109,6 +116,9 @@ export function publishPackToStudio(params: GenerationParams, pack: ReleasePack,
     artworkProvider: publication.artworkProvider,
     artworkModel: publication.artworkModel,
     mode: publication.mode,
+    artworkStrategy: publication.artworkStrategy,
+    brandingMode: publication.brandingMode,
+    previewDataUrl: publication.previewDataUrl,
     params: { ...params, logoBase64: params.logoBase64 ? '[embedded image omitted]' : undefined },
     pack,
   });

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
-import type { ArtworkVariation, FormatPack, GenerationParams, ReleasePack } from '../types';
+import type { ArtworkVariation, BrandingMode, FormatPack, GenerationParams, ReleasePack } from '../types';
 import { Button, TextInput } from './Primitives';
 import { composeArtworkBranding } from '../lib/branding';
 import { adaptArtworkLocally } from '../lib/formatArtwork';
@@ -31,8 +31,15 @@ const downloadBlob = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
+const downloadDataUrl = (dataUrl: string, filename: string) => {
+  const anchor = document.createElement('a');
+  anchor.href = dataUrl;
+  anchor.download = filename;
+  anchor.click();
+};
+
 const dataUrlToBase64 = (url: string) => url.split(',')[1] || '';
-const extensionFor = (url: string) => url.startsWith('data:image/jpeg') ? 'jpg' : 'png';
+const extensionFor = (url: string) => url.startsWith('data:image/jpeg') ? 'jpg' : url.startsWith('data:image/webp') ? 'webp' : 'png';
 const randomSeed = () => Math.max(1, crypto.getRandomValues(new Uint32Array(1))[0] >>> 0);
 const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
@@ -41,11 +48,32 @@ const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve(image);
+  image.onerror = () => reject(new Error('Impossible de préparer la preview Studio.'));
+  image.src = src;
+});
+
+async function makeBridgePreview(dataUrl: string): Promise<string> {
+  const image = await loadImage(dataUrl);
+  const maxWidth = 960;
+  const scale = Math.min(1, maxWidth / image.naturalWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D unavailable for Studio preview.');
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
 export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange, onRegenerate, onTrackAction }) => {
   const [covers, setCovers] = useState<ArtworkVariation[]>([]);
   const [active, setActive] = useState<number | null>(null);
   const [formats, setFormats] = useState<Record<number, FormatPack>>({});
   const [mode, setMode] = useState<Mode>('quality-import');
+  const [brandingMode, setBrandingMode] = useState<BrandingMode>('preserve');
   const [editedPrompt, setEditedPrompt] = useState(pack.coverPrompt);
   const [busy, setBusy] = useState(false);
   const [formatBusy, setFormatBusy] = useState(false);
@@ -63,6 +91,7 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
   const selectedFormats = active === null ? undefined : formats[active];
   const isFinal = mode === 'quality-import';
   const releaseStatus = isFinal ? 'FINAL' : 'DRAFT';
+  const artworkStrategy = params.artworkStrategy || 'integrated';
 
   const resetVisuals = () => {
     setCovers([]);
@@ -72,6 +101,7 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setProgress(null);
+    setBrandingMode('preserve');
   };
 
   useEffect(() => {
@@ -119,29 +149,29 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     setBusy(true);
     setError(null);
     setNotice(null);
-    setProgress('Import premium…');
+    setProgress('Import premium fidèle…');
     try {
       const next: ArtworkVariation[] = [];
       for (let index = 0; index < selectedFiles.length; index++) {
         setProgress(`Import premium ${index + 1}/${selectedFiles.length}`);
         const raw = await fileToDataUrl(selectedFiles[index]);
-        const branded = await composeArtworkBranding(raw, params, '16:9');
         next.push({
           id: `premium-${Date.now()}-${index}`,
-          dataUrl: branded,
+          dataUrl: raw,
           sourceDataUrl: raw,
           seed: makeSeed(params, index),
           aspectRatio: '16:9',
           provider: 'external-ai',
-          model: 'ChatGPT Images / Google Flow / Gemini import + deterministic branding',
+          model: 'ChatGPT Images / Google Flow / Gemini import · preserved',
         });
         onTrackAction();
       }
       setMode('quality-import');
+      setBrandingMode('preserve');
       setCovers(next);
       setFormats({});
       setActive(0);
-      setNotice('FINAL QUALITY : cover(s) premium importée(s). Ce chemin est autorisé à publier vers STUDIO.');
+      setNotice('FINAL QUALITY : import non destructif. TTM conserve exactement la cover fournie tant que tu ne choisis pas explicitement un traitement de branding.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -169,13 +199,12 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
         const seed = randomSeed();
         const raw = await generateLocalAiArtwork(params, buildVariationPrompt(editedPrompt, index, false), seed, '16:9');
         const source = raw.sourceDataUrl || raw.dataUrl;
-        const branded = await composeArtworkBranding(source, params, '16:9');
-        next.push({ ...raw, dataUrl: branded, sourceDataUrl: source, model: `${raw.model || 'ComfyUI local'} · DRAFT` });
+        next.push({ ...raw, dataUrl: source, sourceDataUrl: source, model: `${raw.model || 'ComfyUI local'} · DRAFT` });
         setCovers([...next]);
         if (index === 0) setActive(0);
         onTrackAction();
       }
-      setNotice('LOCAL DRAFT : 4 directions générées sur ton PC. Zéro quota Cloudflare. Elles ne sont pas publiées comme covers finales.');
+      setNotice('LOCAL DRAFT : 4 directions générées sur ton PC. Aucun branding FINAL n’est imposé dessus.');
     } catch (err) {
       setError(`Local Draft : ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -197,15 +226,44 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
         const seed = randomSeed();
         const raw = await generateAiArtwork(params, buildVariationPrompt(editedPrompt, index, true), seed, '16:9', [], 'fast');
         const source = raw.sourceDataUrl || raw.dataUrl;
-        const branded = await composeArtworkBranding(source, params, '16:9');
-        next.push({ ...raw, dataUrl: branded, sourceDataUrl: source, model: `${raw.model || 'FLUX'} · DRAFT ONLY` });
+        next.push({ ...raw, dataUrl: source, sourceDataUrl: source, model: `${raw.model || 'FLUX'} · DRAFT ONLY` });
         setCovers([...next]);
         if (index === 0) setActive(0);
         onTrackAction();
       }
-      setNotice('CLOUD DRAFT : directions générées pour exploration rapide. Elles ne sont jamais publiées comme covers finales.');
+      setNotice('CLOUD DRAFT : exploration uniquement. Aucun titre/logo générique n’est ajouté par TTM.');
     } catch (err) {
       setError(`Cloud Draft : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const applyBranding = async (nextMode: BrandingMode) => {
+    if (!covers.length || busy) return;
+    setBusy(true);
+    setError(null);
+    setProgress(nextMode === 'preserve' ? 'Restauration des imports originaux…' : 'Application du traitement visuel…');
+    try {
+      const next: ArtworkVariation[] = [];
+      for (let index = 0; index < covers.length; index++) {
+        const cover = covers[index];
+        const source = cover.sourceDataUrl || cover.dataUrl;
+        const treated = await composeArtworkBranding(source, params, '16:9', nextMode);
+        const baseModel = (cover.model || 'source artwork').replace(/ · treatment:[^·]+$/i, '');
+        next.push({ ...cover, dataUrl: treated, sourceDataUrl: source, model: `${baseModel} · treatment:${nextMode}` });
+      }
+      setCovers(next);
+      setFormats({});
+      setBrandingMode(nextMode);
+      setNotice(nextMode === 'preserve'
+        ? 'ORIGINAL FINAL : la cover importée est à nouveau utilisée pixel pour pixel.'
+        : nextMode === 'logo-only'
+          ? 'LOGO ONLY : seul le logo de référence est composé localement. Aucun titre blanc automatique.'
+          : 'EDITORIAL : traitement typographique local optionnel appliqué. Tu peux revenir à ORIGINAL FINAL à tout moment.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
       setProgress(null);
@@ -217,7 +275,7 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     setFormatBusy(true);
     setError(null);
     try {
-      const source = selected.sourceDataUrl || selected.dataUrl;
+      const source = selected.dataUrl;
       const [square, story] = await Promise.all([
         adaptArtworkLocally(source, params, '1:1', selected.seed, selected.provider, selected.model),
         adaptArtworkLocally(source, params, '9:16', selected.seed, selected.provider, selected.model),
@@ -225,7 +283,9 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
       setFormats(previous => ({ ...previous, [active]: { square, story } }));
       onTrackAction();
       onTrackAction();
-      if (!isFinal) setNotice('Formats DRAFT générés pour prévisualisation. Importe une cover premium avant la publication finale.');
+      setNotice(isFinal
+        ? 'Formats préparés en safe-fit : le visuel FINAL complet, son titre et son logo restent visibles au lieu d’être recadrés sauvagement.'
+        : 'Formats DRAFT préparés pour prévisualisation.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -262,22 +322,31 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     const safeTitle = params.title.trim().replace(/[^a-z0-9-_]+/gi, '_') || 'release';
     const folder = zip.folder(`${safeTitle}_Track-To-Market_${kind.toUpperCase()}`)!;
     folder.file(`Cover_16-9.${extensionFor(selected.dataUrl)}`, dataUrlToBase64(selected.dataUrl), { base64: true });
+    if (selected.sourceDataUrl && selected.sourceDataUrl !== selected.dataUrl) {
+      folder.file(`Source_Imported_16-9.${extensionFor(selected.sourceDataUrl)}`, dataUrlToBase64(selected.sourceDataUrl), { base64: true });
+    }
     if (selectedFormats?.square) folder.file(`Cover_1-1.${extensionFor(selectedFormats.square.dataUrl)}`, dataUrlToBase64(selectedFormats.square.dataUrl), { base64: true });
     if (selectedFormats?.story) folder.file(`Cover_9-16.${extensionFor(selectedFormats.story.dataUrl)}`, dataUrlToBase64(selectedFormats.story.dataUrl), { base64: true });
     if (videoBlob) folder.file(`Teaser_8s_${kind.toUpperCase()}.webm`, videoBlob);
+    if (params.logoBase64) folder.file(`SHINOBIWAN_Logo_Reference.${extensionFor(params.logoBase64)}`, dataUrlToBase64(params.logoBase64), { base64: true });
+    folder.file('Provider_Handoff.txt', `${editedPrompt}\n\nWORKFLOW NOTE\n${params.logoBase64 ? 'Attach SHINOBIWAN_Logo_Reference as a reference image in Flow / ChatGPT / Gemini before generation.' : 'No logo reference was supplied.'}\nArtwork strategy: ${artworkStrategy}.\nBrand treatment after import: ${brandingMode}.`);
     folder.file('Cover_Prompt.txt', editedPrompt);
     folder.file('Description_SoundCloud.txt', pack.soundcloudDescription);
     folder.file('Tags.txt', pack.tags.join(', '));
     folder.file('Social_Caption.txt', pack.caption);
     folder.file('release-pack.json', JSON.stringify({
-      version: '0.1.4',
+      version: '0.2.0',
+      bridgeVersion: '0.2.0',
       releaseStatus: kind,
       trackId: params.trackId,
       artworkProvider: selected.provider,
       artworkModel: selected.model,
+      artworkStrategy,
+      brandingMode,
+      sourceImportPreserved: Boolean(selected.sourceDataUrl),
       mode,
       publishToStudio: kind === 'final',
-      params: { ...params, logoBase64: params.logoBase64 ? '[embedded image omitted]' : undefined },
+      params: { ...params, logoBase64: params.logoBase64 ? '[logo reference included as separate file]' : undefined },
       pack: { ...pack, coverPrompt: editedPrompt },
     }, null, 2));
 
@@ -285,8 +354,17 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     onTrackAction();
 
     if (kind === 'final') {
-      publishPackToStudio(params, { ...pack, coverPrompt: editedPrompt });
-      setNotice('FINAL ZIP exporté et pack publié au bridge STUDIO.');
+      const previewDataUrl = await makeBridgePreview(selected.dataUrl);
+      publishPackToStudio(params, { ...pack, coverPrompt: editedPrompt }, {
+        releaseStatus: 'final',
+        artworkProvider: selected.provider,
+        artworkModel: selected.model,
+        mode,
+        artworkStrategy,
+        brandingMode,
+        previewDataUrl,
+      });
+      setNotice('FINAL ZIP exporté + cover preview/provenance publiées au bridge STUDIO. La source importée reste intacte dans le pack.');
     } else {
       setNotice('DRAFT ZIP exporté localement. Rien n’a été publié vers STUDIO.');
     }
@@ -299,7 +377,7 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     {videoUrl && <div className="modal" onClick={() => setVideoUrl(null)}><div className="video-modal" onClick={event => event.stopPropagation()}><video src={videoUrl} autoPlay loop controls /><div className="modal-actions"><Button onClick={() => videoBlob && downloadBlob(videoBlob, `${params.title}_${releaseStatus}_teaser_8s.webm`)}>Télécharger WebM</Button><Button variant="ghost" onClick={() => setVideoUrl(null)}>Fermer</Button></div></div></div>}
 
     <header className="release-head">
-      <div><span>TRACK-TO-MARKET / FINALITY GATE</span><h1>{params.title || 'Sans titre'}</h1><p>Explore with drafts · finalize with premium import · publish safely to Studio</p></div>
+      <div><span>TRACK-TO-MARKET / RELEASE ORCHESTRATOR</span><h1>{params.title || 'Sans titre'}</h1><p>Premium handoff → faithful import → release assets → Studio staging</p></div>
       <Button variant="ghost" onClick={onRegenerate}>↻ Recalculer le pack</Button>
     </header>
 
@@ -307,7 +385,7 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
     {notice && <div className="notice-banner">{notice}</div>}
 
     <div className="provider-strip v014-providers">
-      <div className="provider-card recommended final-provider"><strong>01 · FINAL QUALITY</strong><span>ChatGPT Images / Google Flow / Gemini</span><small>Seul chemin marqué FINAL et publiable vers STUDIO</small></div>
+      <div className="provider-card recommended final-provider"><strong>01 · PREMIUM FINAL</strong><span>ChatGPT Images / Google Flow / Gemini</span><small>{artworkStrategy === 'integrated' ? 'Titre + logo intégrés dans la composition' : 'Artwork clean · branding TTM optionnel'}</small></div>
       <div className={`provider-card local-draft-provider ${localHealth.ready ? 'online' : ''}`}><strong>02 · LOCAL DRAFT</strong><span>{localLabel}</span><small>RTX · zéro coût · direction visuelle / idéation</small></div>
       <div className="provider-card draft"><strong>03 · CLOUD DRAFT</strong><span>FLUX.2 klein · Workers AI</span><small>Exploration rapide · quota quotidien</small></div>
     </div>
@@ -318,10 +396,17 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
 
         {!covers.length && !busy ? <div className="art-empty quality-hub v014-hub">
           <div className="art-icon">◇</div>
-          <h3>Explore en DRAFT. Livre en FINAL.</h3>
-          <p>Utilise Local AI ou Cloudflare pour chercher une piste. Quand la direction est bonne, génère la vraie cover avec ChatGPT / Flow / Gemini puis importe-la ici.</p>
-          <Button onClick={() => copy(editedPrompt, 'prompt-main')}>{copied === 'prompt-main' ? 'Prompt premium copié ✓' : '1 · Copier le prompt FINAL'}</Button>
-          <label className="button button-primary external-import">2 · Importer les covers FINAL<input type="file" accept="image/*" multiple onChange={event => importQualityCovers(event.target.files)} /></label>
+          <h3>Premium handoff, pas simple prompt copier-coller.</h3>
+          <p>{params.logoBase64 ? 'Logo chargé : le prompt exige maintenant de l’attacher comme référence dans Flow / ChatGPT / Gemini.' : 'Aucun logo chargé : TTM interdit au provider d’en inventer un.'}</p>
+          <div className="handoff-steps">
+            <span><b>1</b> Copier le prompt + instructions provider</span>
+            <span className={params.logoBase64 ? 'ready' : ''}><b>2</b> {params.logoBase64 ? 'Attacher le logo de référence' : 'Logo optionnel non fourni'}</span>
+            <span><b>3</b> Générer 1–4 FINAL dans le provider</span>
+            <span><b>4</b> Importer ici sans altération</span>
+          </div>
+          <Button onClick={() => copy(editedPrompt, 'prompt-main')}>{copied === 'prompt-main' ? 'Prompt premium copié ✓' : 'Copier le handoff FINAL'}</Button>
+          {params.logoBase64 && <Button variant="ghost" onClick={() => downloadDataUrl(params.logoBase64!, 'SHINOBIWAN_Logo_Reference.png')}>Télécharger le logo de référence</Button>}
+          <label className="button button-primary external-import">Importer les covers FINAL<input type="file" accept="image/*" multiple onChange={event => importQualityCovers(event.target.files)} /></label>
           <div className="draft-launch-row">
             <Button variant="ghost" onClick={generateLocal} disabled={busy}>{localHealth.ready ? 'Explorer · Local Draft' : 'Tester / lancer Local Draft'}</Button>
             <Button variant="ghost" onClick={generateCloudDrafts}>Explorer · Cloud Draft</Button>
@@ -329,40 +414,52 @@ export const OutputDisplayV014: React.FC<Props> = ({ pack, params, onPackChange,
         </div> : <div className="art-grid">{[0,1,2,3].map(index => {
           const cover = covers[index];
           return <div key={cover?.id || index} className={`art-card ${active === index ? 'active' : ''} ${isFinal ? 'final-art-card' : 'draft-art-card'}`} onClick={() => cover && setActive(index)}>
-            {cover ? <><img src={cover.dataUrl} alt={`Cover ${index + 1}`}/><span className={`art-status-badge ${isFinal ? 'final' : 'draft'}`}>{isFinal ? 'FINAL' : 'DRAFT'}</span><div className="art-overlay"><Button onClick={() => setPreview(cover.dataUrl)}>Aperçu</Button></div></> : <div className="art-placeholder">{busy ? 'GÉNÉRATION…' : 'VIDE'}</div>}
+            {cover ? <><img src={cover.dataUrl} alt={`Cover ${index + 1}`}/><span className={`art-status-badge ${isFinal ? 'final' : 'draft'}`}>{isFinal ? brandingMode === 'preserve' ? 'FINAL · ORIGINAL' : `FINAL · ${brandingMode.toUpperCase()}` : 'DRAFT'}</span><div className="art-overlay"><Button onClick={() => setPreview(cover.dataUrl)}>Aperçu</Button></div></> : <div className="art-placeholder">{busy ? 'GÉNÉRATION…' : 'VIDE'}</div>}
           </div>;
         })}</div>}
 
-        {busy && <div className="notice-banner generation-progress">{progress || 'Génération en cours…'} · tes inputs restent sauvegardés.</div>}
+        {busy && <div className="notice-banner generation-progress">{progress || 'Traitement en cours…'} · tes inputs restent sauvegardés.</div>}
 
         {covers.length > 0 && !busy && <>
           <div className={`finality-gate ${isFinal ? 'is-final' : 'is-draft'}`}>
-            <div><strong>{isFinal ? '✓ FINAL COVER SET' : '⚠ DRAFT COVER SET'}</strong><span>{isFinal ? 'Autorisé pour export final et publication STUDIO.' : 'Exploration uniquement. Export draft possible, publication STUDIO bloquée.'}</span></div>
+            <div><strong>{isFinal ? '✓ FINAL COVER SET' : '⚠ DRAFT COVER SET'}</strong><span>{isFinal ? 'Import premium accepté. ORIGINAL FINAL reste le traitement par défaut.' : 'Exploration uniquement. Export draft possible, publication STUDIO bloquée.'}</span></div>
             {!isFinal && <label className="button button-primary external-import">→ Remplacer par la cover FINALE<input type="file" accept="image/*" multiple onChange={event => importQualityCovers(event.target.files)} /></label>}
           </div>
+
+          {isFinal && <div className="brand-treatment">
+            <div className="section-row"><b>Brand treatment</b><span>NON-DESTRUCTIVE</span></div>
+            <p>{artworkStrategy === 'integrated' ? 'Integrated est le mode recommandé : le provider a déjà composé titre + logo. Garde ORIGINAL FINAL sauf besoin précis.' : 'Clean artwork : tu peux conserver l’image nue, ajouter seulement le logo ou appliquer le traitement Editorial local.'}</p>
+            <div className="treatment-options">
+              <button className={brandingMode === 'preserve' ? 'active' : ''} onClick={() => void applyBranding('preserve')}><strong>Original FINAL</strong><small>Aucune modification</small></button>
+              <button className={brandingMode === 'logo-only' ? 'active' : ''} onClick={() => void applyBranding('logo-only')}><strong>Logo only</strong><small>Référence exacte, sans titre</small></button>
+              <button className={brandingMode === 'editorial' ? 'active' : ''} onClick={() => void applyBranding('editorial')}><strong>Editorial</strong><small>Typo locale optionnelle</small></button>
+            </div>
+          </div>}
+
           <div className="workflow-actions">
             <Button variant="ghost" onClick={() => { resetVisuals(); setNotice(null); }}>← Changer de source</Button>
             {mode === 'local-draft' && <Button variant="ghost" onClick={generateLocal}>↻ Régénérer Local Draft</Button>}
             {mode === 'cloud-draft' && <Button variant="ghost" onClick={generateCloudDrafts}>↻ Régénérer Cloud Draft</Button>}
-            <Button variant="ghost" onClick={() => copy(editedPrompt, 'prompt-flow')}>{copied === 'prompt-flow' ? 'Prompt copié ✓' : 'Copier prompt FINAL'}</Button>
+            <Button variant="ghost" onClick={() => copy(editedPrompt, 'prompt-flow')}>{copied === 'prompt-flow' ? 'Handoff copié ✓' : 'Copier handoff FINAL'}</Button>
+            {params.logoBase64 && <Button variant="ghost" onClick={() => downloadDataUrl(params.logoBase64!, 'SHINOBIWAN_Logo_Reference.png')}>Logo référence</Button>}
             {isFinal && <label className="button button-ghost external-import">Remplacer les covers FINAL<input type="file" accept="image/*" multiple onChange={event => importQualityCovers(event.target.files)} /></label>}
           </div>
         </>}
 
         {selected && <div className={`format-panel ${isFinal ? 'final-panel' : 'draft-panel'}`}>
-          <div className="section-row"><b>{isFinal ? 'Finalisation' : 'Prévisualisation draft'}</b><span className={isFinal ? 'status-final' : 'status-draft'}>{isFinal ? 'FINAL · Studio enabled' : 'DRAFT · Studio locked'}</span></div>
+          <div className="section-row"><b>{isFinal ? 'Finalisation' : 'Prévisualisation draft'}</b><span className={isFinal ? 'status-final' : 'status-draft'}>{isFinal ? 'FINAL · Studio staging' : 'DRAFT · Studio locked'}</span></div>
           {!isFinal && <p className="draft-warning">Les formats et le teaser servent à juger la direction. Ils restent marqués DRAFT dans le ZIP et ne sont pas envoyés à STUDIO.</p>}
           <div className="workflow-actions">
             <Button onClick={makeFormats} disabled={formatBusy}>{formatBusy ? 'Adaptation…' : selectedFormats ? '✓ 1:1 + 9:16 prêts' : `Adapter 1:1 + 9:16${isFinal ? '' : ' · DRAFT'}`}</Button>
             <Button variant="ghost" onClick={makeVideo} disabled={videoBusy}>{videoBusy ? 'Encodage…' : `Teaser 8s${isFinal ? '' : ' · DRAFT'}`}</Button>
-            {isFinal ? <Button variant="ghost" onClick={() => exportZip('final')}>Exporter FINAL .ZIP</Button> : <Button variant="ghost" onClick={() => exportZip('draft')}>Exporter DRAFT .ZIP</Button>}
+            {isFinal ? <Button variant="ghost" onClick={() => exportZip('final')}>Exporter FINAL .ZIP + Stage Studio</Button> : <Button variant="ghost" onClick={() => exportZip('draft')}>Exporter DRAFT .ZIP</Button>}
           </div>
-          {selectedFormats && <div className="formats"><figure><img src={selectedFormats.square?.dataUrl} alt="Square"/><figcaption>{isFinal ? 'FINAL' : 'DRAFT'} · 1:1</figcaption></figure><figure className="story"><img src={selectedFormats.story?.dataUrl} alt="Story"/><figcaption>{isFinal ? 'FINAL' : 'DRAFT'} · 9:16</figcaption></figure></div>}
+          {selectedFormats && <div className="formats"><figure><img src={selectedFormats.square?.dataUrl} alt="Square"/><figcaption>{isFinal ? 'FINAL' : 'DRAFT'} · 1:1 safe-fit</figcaption></figure><figure className="story"><img src={selectedFormats.story?.dataUrl} alt="Story"/><figcaption>{isFinal ? 'FINAL' : 'DRAFT'} · 9:16 safe-fit</figcaption></figure></div>}
         </div>}
       </section>
 
       <section className="text-column">
-        <TextPanel title="Cover Prompt · FINAL" action={copied === 'prompt' ? 'Copié ✓' : 'Copier'} onAction={() => copy(editedPrompt, 'prompt')}><TextInput value={editedPrompt} onChange={setEditedPrompt} rows={10}/><button className="mini-link" onClick={() => setEditedPrompt(generateCoverPrompt(params, Math.floor(Math.random()*4)))}>Régénérer seulement le prompt</button></TextPanel>
+        <TextPanel title={`Provider handoff · ${artworkStrategy.toUpperCase()}`} action={copied === 'prompt' ? 'Copié ✓' : 'Copier'} onAction={() => copy(editedPrompt, 'prompt')}><TextInput value={editedPrompt} onChange={setEditedPrompt} rows={12}/><div className={`reference-note ${params.logoBase64 ? 'ready' : ''}`}><strong>{params.logoBase64 ? 'LOGO REFERENCE READY' : 'NO LOGO REFERENCE'}</strong><span>{params.logoBase64 ? 'Le fichier doit être attaché dans le provider. Le texte du prompt ne peut pas transporter les pixels du logo.' : 'Le prompt demande explicitement de ne pas inventer de logo.'}</span></div><button className="mini-link" onClick={() => setEditedPrompt(generateCoverPrompt(params, Math.floor(Math.random()*4)))}>Régénérer seulement le handoff</button></TextPanel>
         <TextPanel title="SoundCloud · max 140" action="Copier" onAction={() => copy(pack.soundcloudDescription, 'sc')}><div className="text-card mono">{pack.soundcloudDescription}<small>{pack.soundcloudDescription.length}/140</small></div><button className="mini-link" onClick={() => replacePack('soundcloudDescription', generateDescription(params))}>Régénérer seulement la description</button></TextPanel>
         <TextPanel title="Social caption" action="Copier" onAction={() => copy(pack.caption, 'caption')}><div className="text-card">{pack.caption}</div><button className="mini-link" onClick={() => replacePack('caption', generateCaption(params))}>Régénérer seulement la caption</button></TextPanel>
         <TextPanel title="Tags SoundCloud"><div className="tags">{pack.tags.map(tag => <span key={tag}>#{tag}</span>)}</div></TextPanel>

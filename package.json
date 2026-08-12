@@ -1,12 +1,13 @@
 {
   "name": "track-to-market-engine",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:v0.2": "node scripts/test-v0.2-release-orchestrator.mjs",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run check:v0.2 && npm run typecheck && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
