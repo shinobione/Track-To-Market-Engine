@@ -3,11 +3,12 @@ import { Button, MultiFieldDropdown, SectionLabel, TextInput } from './component
 import { OutputDisplayV014 } from './components/OutputDisplayV014';
 import type { GenerationParams, ReleasePack } from './types';
 import { generateReleasePack } from './lib/releaseEngine';
-import { announceReady, mergeBridgeInput, readStudioBridgeInput } from './lib/studioBridge';
+import { announceReady, mergeBridgeInput, readStudioBridgeInput, subscribeStudioBridgeInput } from './lib/studioBridge';
 
 const GENRES = ['Afrobeat','Bass House','Classical','Club Electronic','Deep House','Drill','Drum & Bass','Electro','Electro-Funk','G-Funk','Glitch Hop','Glitchcore','Hip Hop','House','Hyperpop','Lo-fi','Phonk','Plunderphonics','Pop','R&B','Reggaeton','Rock','Synthwave','Techno','Trap','West Coast Hip-Hop'].sort();
-const DRAFT_KEY = 'shinobiwan:track-to-market:draft:v0.1.4';
+const DRAFT_KEY = 'shinobiwan:track-to-market:draft:v0.1.5';
 const LEGACY_DRAFT_KEYS = [
+  'shinobiwan:track-to-market:draft:v0.1.4',
   'shinobiwan:track-to-market:draft:v0.1.2',
   'shinobiwan:track-to-market:draft:v0.1.1',
 ];
@@ -31,7 +32,16 @@ export default function AppV014() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({ actions: 0 });
 
-  useEffect(() => { announceReady(); }, []);
+  useEffect(() => {
+    const unsubscribe = subscribeStudioBridgeInput(input => {
+      setParams(previous => mergeBridgeInput(previous, input));
+      setPack(null);
+      setError(null);
+    });
+    announceReady();
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(params));
@@ -66,7 +76,7 @@ export default function AppV014() {
     <aside className="sidebar">
       <div className="sidebar-scroll">
         <div className="brand"><div className="brand-mark">TM</div><div><strong>SHINOBIWAN</strong><span>TRACK-TO-MARKET</span></div></div>
-        <div className="local-badge">FINAL-FIRST · DRAFT LAB</div>
+        <div className="local-badge">FINAL-FIRST · STUDIO BRIDGE V2</div>
 
         <div className="field-group">
           <SectionLabel>Informations de base</SectionLabel>
@@ -95,14 +105,14 @@ export default function AppV014() {
         <div className="stats">
           <div><span>Actions session</span><b>{stats.actions}</b></div>
           <div><span>Cover finale</span><b>Premium import only</b></div>
-          <p>Local AI et Cloudflare sont des moteurs de direction visuelle. Seule une cover premium importée peut être publiée comme FINAL vers STUDIO.</p>
+          <p>Local AI et Cloudflare restent DRAFT. Le Bridge V2 accepte maintenant le contexte long de Studio par postMessage et ne renvoie que les packs FINAL.</p>
         </div>
       </div>
 
       <div className="sidebar-bottom">
         {error && <div className="error-banner">{error}</div>}
         <Button onClick={generate}>✦ Générer / recalculer le Release Pack</Button>
-        <small>v0.1.4 · FINAL vs DRAFT · Studio-safe gate</small>
+        <small>v0.1.5 · Studio Bridge V2 · FINAL gate</small>
       </div>
     </aside>
 
@@ -111,8 +121,8 @@ export default function AppV014() {
         <div className="empty-symbol">↗</div>
         <span>TRACK → MARKET</span>
         <h1>Explore the direction.<br/><em>Ship the final.</em></h1>
-        <p>FINAL = cover premium importée depuis ChatGPT / Flow / Gemini. LOCAL et CLOUD = brouillons de direction. Track-To-Market garde la provenance claire jusqu’au ZIP et à STUDIO.</p>
-        <div className="empty-pills"><span>FINAL QUALITY</span><span>LOCAL DRAFT</span><span>CLOUD DRAFT</span><span>STUDIO SAFE</span></div>
+        <p>FINAL = cover premium importée depuis ChatGPT / Flow / Gemini. LOCAL et CLOUD = brouillons de direction. Studio peut maintenant envoyer le contexte complet sans bourrer les lyrics dans l’URL.</p>
+        <div className="empty-pills"><span>FINAL QUALITY</span><span>LOCAL DRAFT</span><span>CLOUD DRAFT</span><span>STUDIO BRIDGE V2</span></div>
       </div> : <OutputDisplayV014 pack={pack} params={params} onPackChange={setPack} onRegenerate={generate} onTrackAction={() => setStats(previous => ({ actions: previous.actions + 1 }))}/>} 
     </main>
   </div>;
