@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.4 — 2026-08-12
+
+### FINAL vs DRAFT
+- Added a strict product-level finality gate: premium external imports are `FINAL`; Local AI and Cloudflare generations are `DRAFT`.
+- Local AI is explicitly repositioned as `LOCAL DRAFT`: zero-per-generation-cost ideation on the RTX, not a release-ready quality claim.
+- Cloudflare remains `CLOUD DRAFT` for quick exploration only.
+- Cover cards, provider strip, selected-source status and finalization panel now expose FINAL/DRAFT state directly in the UI.
+- Added generation progress labels for sequential Local/Cloud batches.
+
+### Export / Studio safety
+- `release-pack.json` now records `version: 0.1.4`, `releaseStatus`, provider, model, mode and `publishToStudio`.
+- DRAFT assets can be exported in an explicitly named `DRAFT` ZIP for comparison/work-in-progress.
+- DRAFT exports never call the Studio publication bridge.
+- Only premium FINAL imports can create a FINAL ZIP and publish the release pack to Studio.
+- 1:1 / 9:16 adaptations and 8-second teasers inherit the selected source finality in UI and filenames.
+
+### UX / continuity
+- New V0.1.4 draft autosave key with migration fallback from V0.1.2 / V0.1.1.
+- New V0.1.4 app/output components are introduced alongside the previous implementation for easy rollback during real-user smoke testing.
+- README and Studio integration contract updated to match the real quality hierarchy established by the RTX smoke test.
+
+### Scope
+- Track-To-Market repo only for this milestone.
+- No Studio, LaunchPAD, R2 or Cloudflare Worker production code changed in V0.1.4.
+- Next gate after V0.1.4 CI + Pages smoke is V0.2 Studio integration.
+
 ## 0.1.3 — 2026-08-11
 
 ### Local AI installation
