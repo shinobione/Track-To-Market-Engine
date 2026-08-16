@@ -1,7 +1,9 @@
 {
+  "id": "/Track-To-Market-Engine/",
   "name": "SHINOBIWAN Track-To-Market Engine",
   "short_name": "Track-To-Market",
-  "start_url": "./",
+  "start_url": "/Track-To-Market-Engine/",
+  "scope": "/Track-To-Market-Engine/",
   "display": "standalone",
   "background_color": "#090b0f",
   "theme_color": "#090b0f",
