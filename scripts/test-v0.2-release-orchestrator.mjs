@@ -9,8 +9,12 @@ const formats = fs.readFileSync('src/lib/formatArtwork.ts', 'utf8');
 const bridge = fs.readFileSync('src/lib/studioBridge.ts', 'utf8');
 const main = fs.readFileSync('src/main.tsx', 'utf8');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
 
 assert.equal(pkg.version, '0.2.0');
+assert.equal(manifest.id, '/Track-To-Market-Engine/', 'Track-To-Market PWA id must be unique on shinobione.github.io.');
+assert.equal(manifest.start_url, '/Track-To-Market-Engine/', 'Track-To-Market start_url must stay inside its GitHub Pages project.');
+assert.equal(manifest.scope, '/Track-To-Market-Engine/', 'Track-To-Market scope must not cover sibling GitHub Pages apps.');
 assert.match(app, /artworkStrategy: 'integrated'/, 'Integrated premium artwork must be the default strategy.');
 assert.match(app, /Flow\/ChatGPT compose title \+ logo/, 'The UI must explain integrated provider composition.');
 assert.match(app, /image de référence dans Flow \/ ChatGPT \/ Gemini/, 'Uploaded logo handoff must be explicit in UI.');
@@ -38,4 +42,4 @@ assert.match(bridge, /previewDataUrl: publication\.previewDataUrl/, 'Studio brid
 assert.match(bridge, /brandingMode: publication\.brandingMode/, 'Studio bridge must carry branding provenance.');
 assert.match(main, /import '\.\/v0\.2\.0\.css';/, 'V0.2 orchestrator styles must be loaded.');
 
-console.log('V0.2 Release Orchestrator passed logo-reference, non-destructive FINAL, safe-format and Studio-preview guards.');
+console.log('V0.2 Release Orchestrator passed logo-reference, non-destructive FINAL, safe-format, Studio-preview and isolated PWA identity guards.');
